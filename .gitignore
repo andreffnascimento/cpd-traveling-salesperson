@@ -1,0 +1,10 @@
+# C build files
+*.d
+*.o
+
+# VSCode settings
+workspace.code-workspace
+
+# Binaries
+traveling-salesperson
+bin/
