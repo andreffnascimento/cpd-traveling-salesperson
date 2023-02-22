@@ -1,16 +1,12 @@
-#include <stdio.h>
-#include <stdlib.h>
-
+#include "include.h"
 #include "tsp/tsp.h"
 #include "utils/file.h"
-#include "utils/log.h"
 
-
-tsp_t parseTSP(const char* inPath, int maxValue) {
+tsp_t parseInput(const char* inPath, int maxValue) {
     FILE* inputFile = openFile(inPath, "r");
-    tsp_t tsp;
-    fscanf(inputFile, "%d %d\n", &tsp.nCities, &tsp.nRoads);
-    tsp.roads = malloc(tsp.nRoads * sizeof(tspRoad_t));
+    int nCities, nRoads;
+    fscanf(inputFile, "%d %d\n", &nCities, &nRoads);
+    tsp_t tsp = tspCreate(nCities, nRoads);
 
     for (int i = 0; i < tsp.nRoads; i++) {
         tspRoad_t road;
@@ -22,6 +18,17 @@ tsp_t parseTSP(const char* inPath, int maxValue) {
     return tsp;
 }
 
+void printSolution(const tsp_t* tsp) {
+    const tspSolution_t* solution = &tsp->solution;
+    if (solution->hasSolution) {
+        printf("%f\n", solution->cost);
+        for (int i = 0; i < tsp->nCities; i++)
+            printf("%d ", solution->cities[i]);
+        printf("0\n");
+    } else {
+        printf("NO SOLUTION\n");
+    }
+}
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
@@ -34,8 +41,10 @@ int main(int argc, char* argv[]) {
     LOG("inPath = %s", inPath);
     LOG("maxValue = %d", maxValue);
 
-    tsp_t tsp = parseTSP(inPath, maxValue);
+    tsp_t tsp = parseInput(inPath, maxValue);
     DEBUG(tspPrint(&tsp));
+    tspSolve(&tsp);
+    printSolution(&tsp);
     tspFree(&tsp);
 
     return 0;
