@@ -72,3 +72,4 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 | Name               | GitHub ID         | Email                                 |
 | :----------------- | :---------------- | ------------------------------------: |
 | André Nascimento   | ArckenimuZ        | andreffnascimento@tecnico.ulisboa.pt  |
+| João Veríssimo     | Swag4Yolo         | joao.verissimo@tecnico.ulisboa.pt     |
