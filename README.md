@@ -50,16 +50,11 @@ make build
 
 
 # Execution
-This section explains how to run the project using two different methods.
-
-- **Makefile** command
-```
-make run
-```
+This section explains how to run the project:
 
 - **Shell** command
 ```
-./traveling-salesperson
+./tsp <cities_file> <max_value>
 ```
 
 <br>

@@ -6,5 +6,5 @@
 workspace.code-workspace
 
 # Binaries
-traveling-salesperson
+tsp
 bin/

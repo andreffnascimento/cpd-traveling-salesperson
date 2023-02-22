@@ -6,7 +6,7 @@
 
 # Executable properties
 APP_NAME	:= CPD - Traveling Salesperson Problem
-EXE_NAME	:= traveling-salesperson
+EXE_NAME	:= tsp
 
 
 
@@ -44,13 +44,6 @@ clean:
 compile: $(FILES_OBJ)
 
 build: $(EXE_NAME)
-
-run: build
-	@ echo "\t\e[35m[Staring Program]: \e[0;4;96m"$(APP_NAME)"\e[0m"
-	@ echo "\e[2m=======================================================================\e[0m\n"
-	@ ./$(EXE_NAME)
-	@ echo "\n\e[2m=======================================================================\e[0m"
-	@ echo "\t\e[35m[Terminating Program]: \e[0;4;96m"$(APP_NAME)"\e[0m\n"
 
 
 
