@@ -17,7 +17,7 @@ DIR_BIN 	:= bin/
 
 # Compilation properties
 INCLUDES			:= -I$(ROOT_DIR)$(DIR_SRC)
-MACROS 		    := 
+MACROS 		    := -D__DEBUG__
 
 # Compiler flags
 CC   	  := gcc
