@@ -1,11 +1,12 @@
 #include "include.h"
 #include "tsp/tsp.h"
 #include "utils/file.h"
+#include "utils/queue.h"
 
 tsp_t parseInput(const char* inPath, int maxValue) {
     FILE* inputFile = openFile(inPath, "r");
-    int nCities, nRoads;
-    fscanf(inputFile, "%d %d\n", &nCities, &nRoads);
+    size_t nCities, nRoads;
+    fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
     tsp_t tsp = tspCreate(nCities, nRoads);
 
     for (int i = 0; i < tsp.nRoads; i++) {
@@ -30,6 +31,10 @@ void printSolution(const tsp_t* tsp) {
     }
 }
 
+int compFun(void* a, void* b) {
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 3) {
         printf("Usage: ./tsp <cities_file> <max_value>\n");
@@ -45,7 +50,7 @@ int main(int argc, char* argv[]) {
     DEBUG(tspPrint(&tsp));
     tspSolve(&tsp);
     printSolution(&tsp);
-    tspFree(&tsp);
+    tspDelete(&tsp);
 
     return 0;
 }

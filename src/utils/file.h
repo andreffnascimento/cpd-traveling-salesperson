@@ -5,4 +5,4 @@
 
 FILE* openFile(const char* path, const char* mode);
 
-#endif
+#endif // __UTILS_FILE_H__

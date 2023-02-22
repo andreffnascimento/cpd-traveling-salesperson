@@ -11,4 +11,4 @@
 #define DEBUG(X)
 #endif
 
-#endif
+#endif // __UTILS_LOG_H__
