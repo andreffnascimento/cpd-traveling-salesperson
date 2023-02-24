@@ -3,7 +3,7 @@
 #include "utils/file.h"
 #include "utils/queue.h"
 
-tsp_t parseInput(const char* inPath, int maxValue) {
+tsp_t parseInput(const char* inPath) {
     FILE* inputFile = openFile(inPath, "r");
     size_t nCities, nRoads;
     fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
@@ -22,7 +22,7 @@ tsp_t parseInput(const char* inPath, int maxValue) {
 void printSolution(const tsp_t* tsp) {
     const tspSolution_t* solution = &tsp->solution;
     if (solution->hasSolution) {
-        printf("%f\n", solution->cost);
+        printf("%.1f\n", solution->cost);
         for (int i = 0; i < tsp->nCities; i++)
             printf("%d ", solution->cities[i]);
         printf("0\n");
@@ -36,6 +36,9 @@ int compFun(void* a, void* b) {
 }
 
 int main(int argc, char* argv[]) {
+
+    double exec_time;
+
     if (argc != 3) {
         printf("Usage: ./tsp <cities_file> <max_value>\n");
         exit(1);
@@ -46,9 +49,14 @@ int main(int argc, char* argv[]) {
     LOG("inPath = %s", inPath);
     LOG("maxValue = %d", maxValue);
 
-    tsp_t tsp = parseInput(inPath, maxValue);
+    tsp_t tsp = parseInput(inPath);
     DEBUG(tspPrint(&tsp));
-    tspSolve(&tsp);
+
+    exec_time += -omp_get_wtime();
+    tspSolve(&tsp, maxValue);
+    exec_time += omp_get_wtime();
+    fprintf(stderr, "%.lfs\n", exec_time);
+
     printSolution(&tsp);
     tspDelete(&tsp);
 

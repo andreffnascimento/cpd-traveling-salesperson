@@ -23,7 +23,7 @@ MACROS 		    := -D__DEBUG__
 CC   	  := gcc
 LD   	 	:= gcc
 CCFLAGS	:= -Wall -std=gnu99 -MD -O3
-LDFLAGS	:= -lm
+LDFLAGS	:= -lm -fopenmp
 
 # Source Objects
 FILES_SRC	:= $(shell find $(DIR_SRC) -type f -name "*.c")

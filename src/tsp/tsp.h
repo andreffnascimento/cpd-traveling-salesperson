@@ -11,7 +11,7 @@ typedef struct {
 
 typedef struct {
     bool hasSolution;
-    float cost;
+    double cost;
     int* cities;
 } tspSolution_t;
 
@@ -21,6 +21,19 @@ typedef struct {
     tspRoad_t* roads;
     tspSolution_t solution;
 } tsp_t;
+
+typedef struct {
+    int* tour;
+    double cost;
+    double lb;
+    int length;
+    int* currentCity;
+
+} tspNode_t;
+
+tspNode_t* tspCreateNode(int* tour, double cost, double lb, int length, int currentCity);
+
+void tspDeleteNode(tspNode_t *node);
 
 tsp_t tspCreate(size_t nCities, size_t nRoads);
 
