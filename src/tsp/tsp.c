@@ -9,14 +9,10 @@ int compFun(tspNode_t *n1, tspNode_t *n2) {
     return 1;
 }
 
-
-
-tsp_t tspCreate(size_t nCities, size_t nRoads)
-{
+tsp_t tspCreate(size_t nCities, size_t nRoads) {
     tsp_t tsp;
     tsp.nCities = nCities;
     tsp.nRoads = nRoads;
-    // tsp.roads = malloc(tsp.nRoads * sizeof(tspRoad_t));
 
     // Initialization of the Roads to Null
     tsp.roads = (double **)malloc(tsp.nRoads * sizeof(double *));
@@ -32,8 +28,6 @@ tsp_t tspCreate(size_t nCities, size_t nRoads)
     tsp.solution.hasSolution = false;
     tsp.solution.cost = INFINITY;
     tsp.solution.bestTour = NULL;
-    // ISSUE: excessive amount of allocation of memory with the possible result
-    // tsp.solution.cities = malloc(tsp.nCities * sizeof(int));
 
     tsp.trashQueue = queueCreate(&emptyFunc);
     tsp.queue = queueCreate(&compFun);
@@ -198,7 +192,7 @@ void tspSolve(tsp_t *tsp) {
         //printf("From: %d Node %d\n", (node->tour ? node->tour->currentCity : -1), node->currentCity);
 
         if (node->lb >= tsp->solution.maxValue) {
-            printf("[+] Elements in queue are not important\n");
+            //printf("[+] Elements in queue are not important\n");
             return;
         }
 
