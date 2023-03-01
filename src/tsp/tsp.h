@@ -18,13 +18,14 @@ typedef struct {
     double cost;
     tspNode_t *bestTour;
     int maxValue;
-    priorityQueue_t trashQueue;
 } tspSolution_t;
 
 typedef struct {
     size_t nCities;
     size_t nRoads;
     double** roads;
+    priorityQueue_t trashQueue;
+    priorityQueue_t queue;
     tspSolution_t solution;
 } tsp_t;
 
