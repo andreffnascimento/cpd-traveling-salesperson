@@ -3,44 +3,50 @@
 
 #include "include.h"
 
-typedef struct {
-    int cityA;
-    int cityB;
-    int cost;
-} tspRoad_t;
+//Prototypes
+typedef struct tspNode tspNode_t;
+// typedef struct tsp_t;
+// typedef struct tspSolution_t;
+
+
+/*----------------------------------------------------------
+_____________________________tsp___________________________
+----------------------------------------------------------*/
 
 typedef struct {
     bool hasSolution;
     double cost;
-    int* cities;
+    tspNode_t *bestTour;
+    int maxValue;
+    priorityQueue_t trashQueue;
 } tspSolution_t;
 
 typedef struct {
     size_t nCities;
     size_t nRoads;
-    tspRoad_t* roads;
+    double** roads;
     tspSolution_t solution;
 } tsp_t;
 
-typedef struct {
-    int* tour;
+tsp_t tspCreate(size_t nCities, size_t nRoads);
+void tspDelete(tsp_t* tsp);
+void tspPrint(const tsp_t* tsp);
+void tspSolve(tsp_t* tsp);
+
+/*----------------------------------------------------------
+__________________________tsp Node ________________________
+----------------------------------------------------------*/
+
+typedef struct tspNode {
+    struct tspNode *tour;
     double cost;
     double lb;
     int length;
-    int* currentCity;
+    int currentCity;
 
 } tspNode_t;
 
-tspNode_t* tspCreateNode(int* tour, double cost, double lb, int length, int currentCity);
-
+tspNode_t* tspCreateNode(tspNode_t* tour, double cost, double lb, int length, int currentCity);
 void tspDeleteNode(tspNode_t *node);
-
-tsp_t tspCreate(size_t nCities, size_t nRoads);
-
-void tspDelete(tsp_t* tsp);
-
-void tspPrint(const tsp_t* tsp);
-
-void tspSolve(const tsp_t* tsp);
 
 #endif // __TSP_TSP_H__

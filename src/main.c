@@ -1,38 +1,52 @@
 #include "include.h"
 #include "tsp/tsp.h"
 #include "utils/file.h"
-#include "utils/queue.h"
 
-tsp_t parseInput(const char* inPath) {
+tsp_t parseInput(const char* inPath, int maxValue) {
     FILE* inputFile = openFile(inPath, "r");
     size_t nCities, nRoads;
     fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
     tsp_t tsp = tspCreate(nCities, nRoads);
 
+    tsp.solution.maxValue = maxValue;
+
     for (int i = 0; i < tsp.nRoads; i++) {
-        tspRoad_t road;
-        fscanf(inputFile, "%d %d %d\n", &road.cityA, &road.cityB, &road.cost);
-        tsp.roads[i] = road;
+        //tspRoad_t road;
+        int cityA, cityB;
+        double cost;
+        
+        //DOUBT: should we parse the 'cost' as double?
+        fscanf(inputFile, "%d %d %le\n", &cityA, &cityB, &cost);
+        //tsp.roads[i] = road;
+        tsp.roads[cityA][cityB] = cost;
+        tsp.roads[cityB][cityA] = cost;
     }
 
     fclose(inputFile);
     return tsp;
 }
 
+void printSolutionHelper(const tspNode_t *node) {
+
+    //Note: Due to space in the statement, to avoid problems 
+    if (node->tour == NULL) printf("%d ", node->currentCity);
+    else
+    {
+        printSolutionHelper(node->tour);
+        printf("%d ", node->currentCity);
+        // if (node->tour) printSolutionHelper(node->tour);
+    }
+}
+
 void printSolution(const tsp_t* tsp) {
     const tspSolution_t* solution = &tsp->solution;
     if (solution->hasSolution) {
         printf("%.1f\n", solution->cost);
-        for (int i = 0; i < tsp->nCities; i++)
-            printf("%d ", solution->cities[i]);
-        printf("0\n");
+        printSolutionHelper(solution->bestTour);
+        printf("\n");
     } else {
         printf("NO SOLUTION\n");
     }
-}
-
-int compFun(void* a, void* b) {
-    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -49,11 +63,11 @@ int main(int argc, char* argv[]) {
     LOG("inPath = %s", inPath);
     LOG("maxValue = %d", maxValue);
 
-    tsp_t tsp = parseInput(inPath);
+    tsp_t tsp = parseInput(inPath, maxValue);
     DEBUG(tspPrint(&tsp));
 
     exec_time += -omp_get_wtime();
-    tspSolve(&tsp, maxValue);
+    tspSolve(&tsp);
     exec_time += omp_get_wtime();
     fprintf(stderr, "%.lfs\n", exec_time);
 

@@ -4,6 +4,7 @@
 
 # VSCode settings
 workspace.code-workspace
+.vscode
 
 # Binaries
 !src/tsp/
