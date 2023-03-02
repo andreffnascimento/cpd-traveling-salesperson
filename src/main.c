@@ -11,13 +11,10 @@ tsp_t parseInput(const char* inPath, int maxValue) {
     tsp.solution.maxValue = maxValue;
 
     for (int i = 0; i < tsp.nRoads; i++) {
-        //tspRoad_t road;
         int cityA, cityB;
         double cost;
         
-        //DOUBT: should we parse the 'cost' as double?
         fscanf(inputFile, "%d %d %le\n", &cityA, &cityB, &cost);
-        //tsp.roads[i] = road;
         tsp.roads[cityA][cityB] = cost;
         tsp.roads[cityB][cityA] = cost;
     }
@@ -34,7 +31,6 @@ void printSolutionHelper(const tspNode_t *node) {
     {
         printSolutionHelper(node->tour);
         printf("%d ", node->currentCity);
-        // if (node->tour) printSolutionHelper(node->tour);
     }
 }
 

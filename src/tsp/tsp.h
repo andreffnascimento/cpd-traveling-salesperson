@@ -5,9 +5,6 @@
 
 //Prototypes
 typedef struct tspNode tspNode_t;
-// typedef struct tsp_t;
-// typedef struct tspSolution_t;
-
 
 /*----------------------------------------------------------
 _____________________________tsp___________________________
