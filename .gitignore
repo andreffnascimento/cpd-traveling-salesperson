@@ -10,3 +10,7 @@ workspace.code-workspace
 !src/tsp/
 tsp
 bin/
+
+# Test Files
+test/res.txt
+test/time.txt

@@ -26,11 +26,11 @@ tsp_t parseInput(const char* inPath, int maxValue) {
 void printSolutionHelper(const tspNode_t *node) {
 
     //Note: Due to space in the statement, to avoid problems 
-    if (node->tour == NULL) printf("%d ", node->currentCity);
+    if (node->tour == NULL) printf("%d", node->currentCity);
     else
     {
         printSolutionHelper(node->tour);
-        printf("%d ", node->currentCity);
+        printf(" %d", node->currentCity);
     }
 }
 
@@ -46,9 +46,6 @@ void printSolution(const tsp_t* tsp) {
 }
 
 int main(int argc, char* argv[]) {
-
-    double exec_time;
-
     if (argc != 3) {
         printf("Usage: ./tsp <cities_file> <max_value>\n");
         exit(1);
@@ -62,13 +59,12 @@ int main(int argc, char* argv[]) {
     tsp_t tsp = parseInput(inPath, maxValue);
     DEBUG(tspPrint(&tsp));
 
-    exec_time += -omp_get_wtime();
+    double execTime = -omp_get_wtime();
     tspSolve(&tsp);
-    exec_time += omp_get_wtime();
-    fprintf(stderr, "%.lfs\n", exec_time);
+    execTime += omp_get_wtime();
 
+    fprintf(stderr, "%.1fs\n", execTime);
     printSolution(&tsp);
     tspDelete(&tsp);
-
     return 0;
 }
