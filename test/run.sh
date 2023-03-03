@@ -15,7 +15,7 @@ IN=${1}
 OUT=${PATH_OUT}/$(basename ${IN} .in).out
 TEST=$(basename $IN)
 RUN=${PATH_DIR}/../tsp
-MAX_VALUE=25
+MAX_VALUE=$(echo ${TEST} | sed -n "s/^.*-\([0-9]*\).*$/\1/p")
 
 ${RUN} ${IN} ${MAX_VALUE} 1> ${PATH_RES} 2> ${PATH_TIME}
 diff ${PATH_RES} ${OUT} > /dev/null
