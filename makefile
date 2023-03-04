@@ -17,13 +17,13 @@ DIR_BIN 	:= bin/
 
 # Compilation properties
 INCLUDES			:= -I$(ROOT_DIR)$(DIR_SRC)
-MACROS 		    := -D__DEBUG__
+MACROS 		    ?= -D__DEBUG__
 
 # Compiler flags
 CC   	  := gcc
 LD   	 	:= gcc
 CCFLAGS	:= -Wall -std=gnu99 -MD -O3
-LDFLAGS	:= -lm
+LDFLAGS	:= -lm -fopenmp
 
 # Source Objects
 FILES_SRC	:= $(shell find $(DIR_SRC) -type f -name "*.c")

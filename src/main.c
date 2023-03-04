@@ -1,38 +1,41 @@
 #include "include.h"
 #include "tsp/tsp.h"
 #include "utils/file.h"
-#include "utils/queue.h"
 
-tsp_t parseInput(const char* inPath, int maxValue) {
+tsp_t parseInput(const char* inPath) {
     FILE* inputFile = openFile(inPath, "r");
     size_t nCities, nRoads;
     fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
     tsp_t tsp = tspCreate(nCities, nRoads);
 
     for (int i = 0; i < tsp.nRoads; i++) {
-        tspRoad_t road;
-        fscanf(inputFile, "%d %d %d\n", &road.cityA, &road.cityB, &road.cost);
-        tsp.roads[i] = road;
+        int cityA, cityB;
+        double cost;
+        fscanf(inputFile, "%d %d %le\n", &cityA, &cityB, &cost);
+        tsp.roadCosts[cityA][cityB] = cost;
+        tsp.roadCosts[cityB][cityA] = cost;
     }
 
-    fclose(inputFile);
+    closeFile(inputFile);
     return tsp;
 }
 
-void printSolution(const tsp_t* tsp) {
-    const tspSolution_t* solution = &tsp->solution;
+void printSolutionAux(const tspNode_t* node) {
+    if (node->parent != NULL) {
+        printSolutionAux(node->parent);
+        putchar(' ');
+    }
+    printf("%d", node->currentCity);
+}
+
+void printSolution(const tspSolution_t* solution) {
     if (solution->hasSolution) {
-        printf("%f\n", solution->cost);
-        for (int i = 0; i < tsp->nCities; i++)
-            printf("%d ", solution->cities[i]);
-        printf("0\n");
+        printf("%.1f\n", solution->cost);
+        printSolutionAux(solution->bestTour);
+        printf("\n");
     } else {
         printf("NO SOLUTION\n");
     }
-}
-
-int compFun(void* a, void* b) {
-    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -46,11 +49,15 @@ int main(int argc, char* argv[]) {
     LOG("inPath = %s", inPath);
     LOG("maxValue = %d", maxValue);
 
-    tsp_t tsp = parseInput(inPath, maxValue);
+    tsp_t tsp = parseInput(inPath);
     DEBUG(tspPrint(&tsp));
-    tspSolve(&tsp);
-    printSolution(&tsp);
-    tspDelete(&tsp);
 
+    double execTime = -omp_get_wtime();
+    const tspSolution_t* solution = tspSolve(&tsp, maxValue);
+    execTime += omp_get_wtime();
+
+    fprintf(stderr, "%.1fs\n", execTime);
+    printSolution(solution);
+    tspDestroy(&tsp);
     return 0;
 }

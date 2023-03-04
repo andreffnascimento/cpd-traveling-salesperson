@@ -4,8 +4,12 @@
 
 # VSCode settings
 workspace.code-workspace
+.vscode
 
 # Binaries
-!src/tsp/
-tsp
+/tsp
 bin/
+
+# Test Files
+test/res.txt
+test/time.txt

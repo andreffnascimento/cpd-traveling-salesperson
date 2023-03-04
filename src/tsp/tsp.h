@@ -2,32 +2,32 @@
 #define __TSP_TSP_H__
 
 #include "include.h"
+#include "tspContainer.h"
 
-typedef struct {
-    int cityA;
-    int cityB;
-    int cost;
-} tspRoad_t;
+#define NONEXISTENT_ROAD_VALUE -1
+
+/*----------------------------------------------------------
+_____________________________tsp____________________________
+----------------------------------------------------------*/
 
 typedef struct {
     bool hasSolution;
-    float cost;
-    int* cities;
+    double cost;
+    tspNode_t* bestTour;
+    tspContainer_t* tspContainer;
 } tspSolution_t;
 
 typedef struct {
     size_t nCities;
     size_t nRoads;
-    tspRoad_t* roads;
+    double** roadCosts;
+    priorityQueue_t queue;
     tspSolution_t solution;
 } tsp_t;
 
 tsp_t tspCreate(size_t nCities, size_t nRoads);
-
-void tspDelete(tsp_t* tsp);
-
+void tspDestroy(tsp_t* tsp);
 void tspPrint(const tsp_t* tsp);
-
-void tspSolve(const tsp_t* tsp);
+const tspSolution_t* tspSolve(tsp_t* tsp, int maxValue);
 
 #endif // __TSP_TSP_H__

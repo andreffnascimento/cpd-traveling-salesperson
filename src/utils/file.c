@@ -9,3 +9,7 @@ FILE* openFile(const char* path, const char* mode) {
 
     return file;
 }
+
+void closeFile(FILE* file) {
+    fclose(file);
+}
