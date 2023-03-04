@@ -35,7 +35,6 @@ priorityQueue_t queueCreate(int (*cmpFun)(void*, void*)) {
     return queue;
 }
 
-// Duplicate queue
 priorityQueue_t queueDuplicate(priorityQueue_t* queue) {
     priorityQueue_t duplicate;
     duplicate.buffer = malloc(queue->max_size * sizeof(void*));
@@ -46,11 +45,8 @@ priorityQueue_t queueDuplicate(priorityQueue_t* queue) {
     return duplicate;
 }
 
-void queueDelete(priorityQueue_t* queue) {
+void queueDestroy(priorityQueue_t* queue) {
     free(queue->buffer);
-    queue->buffer = NULL;
-    queue->max_size = -1;
-    queue->size = -1;
 }
 
 void* queuePush(priorityQueue_t* queue, void* element) {
