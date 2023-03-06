@@ -116,7 +116,7 @@ const tspSolution_t* tspSolve(tsp_t* tsp, int maxValue) {
             return &tsp->solution;
         }
 
-        if (node->length == tsp->nCities) { // we already visited all the cities
+        if (node->length == tsp->nCities && _isNeighbour(tsp, node->currentCity, 0)) { // we already visited all the cities
             double finalCost = node->cost + tsp->roadCosts[node->currentCity][0];
             if ((finalCost < maxValue) && (finalCost < tsp->solution.cost)) {
                 tspNode_t* finalNode = tspContainerFetchNode(&tsp->solution.tspContainer, node, finalCost, _calculateLb(tsp, node, 0), node->length, 0);
@@ -138,5 +138,6 @@ const tspSolution_t* tspSolve(tsp_t* tsp, int maxValue) {
                 }
             }
         }
+        //Need to delete node
     }
 }
