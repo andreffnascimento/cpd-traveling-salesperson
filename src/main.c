@@ -8,15 +8,13 @@ tsp_t parseInput(const char* inPath, int maxValue) {
     fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
     tsp_t tsp = tspCreate(nCities, nRoads);
 
-    tsp.solution.maxValue = maxValue;
-
     for (int i = 0; i < tsp.nRoads; i++) {
         int cityA, cityB;
         double cost;
         
         fscanf(inputFile, "%d %d %le\n", &cityA, &cityB, &cost);
-        tsp.roads[cityA][cityB] = cost;
-        tsp.roads[cityB][cityA] = cost;
+        tsp.roadCosts[cityA][cityB] = cost;
+        tsp.roadCosts[cityB][cityA] = cost;
     }
 
     fclose(inputFile);
@@ -26,10 +24,10 @@ tsp_t parseInput(const char* inPath, int maxValue) {
 void printSolutionHelper(const tspNode_t *node) {
 
     //Note: Due to space in the statement, to avoid problems 
-    if (node->tour == NULL) printf("%d", node->currentCity);
+    if (node->parent == NULL) printf("%d", node->currentCity);
     else
     {
-        printSolutionHelper(node->tour);
+        printSolutionHelper(node->parent);
         printf(" %d", node->currentCity);
     }
 }
@@ -60,11 +58,11 @@ int main(int argc, char* argv[]) {
     DEBUG(tspPrint(&tsp));
 
     double execTime = -omp_get_wtime();
-    tspSolve(&tsp);
+    tspSolve(&tsp, maxValue);
     execTime += omp_get_wtime();
 
     fprintf(stderr, "%.1fs\n", execTime);
     printSolution(&tsp);
-    tspDelete(&tsp);
+    tspDestroy(&tsp);
     return 0;
 }
