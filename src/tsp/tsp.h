@@ -21,7 +21,6 @@ typedef struct {
     size_t nCities;
     size_t nRoads;
     double** roadCosts;
-    priorityQueue_t queue;
     tspSolution_t solution;
 } tsp_t;
 

@@ -27,9 +27,6 @@ void tspDestroy(tsp_t* tsp) {
     for (size_t i = 0; i < tsp->nCities; i++)
         free(tsp->roadCosts[i]);
     free(tsp->roadCosts);
-
-    // FIXME: Move to its own function
-    queueDestroy(&tsp->queue);
     tsp->solution.bestTour = NULL;
 }
 
@@ -107,21 +104,22 @@ static bool _isCityInTour(const tspNode_t* node, int cityNumber) {
 }
 
 const tspSolution_t* tspSolve(tsp_t* tsp, int maxValue) {
-    tspContainer_t* tspContainer = tspContainerCreate();
-    tsp->solution.tspContainer = tspContainer;
-    tspNode_t* startNode = tspContainerFetchNode(&tspContainer, NULL, 0, _calculateInitialLb(tsp), 1, 0);
-    tsp->queue = queueCreate(&_tspNodeCompFun);
-    queuePush(&tsp->queue, startNode);
+    tsp->solution.tspContainer = tspContainerCreate();
+    tspNode_t* startNode = tspContainerFetchNode(&tsp->solution.tspContainer, NULL, 0, _calculateInitialLb(tsp), 1, 0);
+    priorityQueue_t queue = queueCreate(&_tspNodeCompFun);
+    queuePush(&queue, startNode);
 
     while (true) {
-        tspNode_t* node = queuePop(&tsp->queue);
-        if (node == NULL || node->lb >= maxValue)
+        tspNode_t* node = queuePop(&queue);
+        if (node == NULL || node->lb >= maxValue) {
+            queueDestroy(&queue);
             return &tsp->solution;
+        }
 
         if (node->length == tsp->nCities) { // we already visited all the cities
             double finalCost = node->cost + tsp->roadCosts[node->currentCity][0];
             if ((finalCost < maxValue) && (finalCost < tsp->solution.cost)) {
-                tspNode_t* finalNode = tspContainerFetchNode(&tspContainer, node, finalCost, _calculateLb(tsp, node, 0), node->length, 0);
+                tspNode_t* finalNode = tspContainerFetchNode(&tsp->solution.tspContainer, node, finalCost, _calculateLb(tsp, node, 0), node->length, 0);
                 tsp->solution.hasSolution = true;
                 tsp->solution.bestTour = finalNode;
                 tsp->solution.cost = finalNode->cost;
@@ -135,8 +133,8 @@ const tspSolution_t* tspSolve(tsp_t* tsp, int maxValue) {
                         continue;
                     
                     double cost = node->cost + tsp->roadCosts[node->currentCity][cityNumber];
-                    tspNode_t* nextNode = tspContainerFetchNode(&tspContainer, node, cost, lb, node->length + 1, cityNumber);
-                    queuePush(&tsp->queue, nextNode);
+                    tspNode_t* nextNode = tspContainerFetchNode(&tsp->solution.tspContainer, node, cost, lb, node->length + 1, cityNumber);
+                    queuePush(&queue, nextNode);
                 }
             }
         }

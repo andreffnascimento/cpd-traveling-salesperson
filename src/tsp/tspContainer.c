@@ -8,7 +8,7 @@ tspContainer_t* tspContainerCreate() {
 }
 
 void tspContainerDestroy(tspContainer_t* tspContainer) {
-    while (tspContainer->next != NULL)
+    if (tspContainer->next != NULL)
         tspContainerDestroy(tspContainer->next);
     free(tspContainer);
 }
@@ -21,8 +21,10 @@ static tspContainer_t* _tspContainerExpand(tspContainer_t* oldTspContainer) {
 
 tspNode_t* tspContainerFetchNode(tspContainer_t** tspContainerRef, const tspNode_t* parent, double cost, double lb, int length, int currentCity) {
     tspContainer_t* tspContainer = *tspContainerRef;
-    if (tspContainer->curr == TSP_CONTAINER_SIZE)
-        *tspContainerRef = tspContainer = _tspContainerExpand(tspContainer);
+    if (tspContainer->curr == TSP_CONTAINER_SIZE) {
+        tspContainer = _tspContainerExpand(tspContainer);
+        *tspContainerRef = tspContainer;
+    }
 
     tspNode_t* tspNode = &(tspContainer->nodes[tspContainer->curr++]);
     tspNode->parent = parent;
