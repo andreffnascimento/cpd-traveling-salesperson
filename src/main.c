@@ -2,7 +2,7 @@
 #include "tsp/tsp.h"
 #include "utils/file.h"
 
-tsp_t parseInput(const char* inPath, int maxValue) {
+tsp_t parseInput(const char* inPath) {
     FILE* inputFile = openFile(inPath, "r");
     size_t nCities, nRoads;
     fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
@@ -21,22 +21,18 @@ tsp_t parseInput(const char* inPath, int maxValue) {
     return tsp;
 }
 
-void printSolutionHelper(const tspNode_t *node) {
-
-    //Note: Due to space in the statement, to avoid problems 
-    if (node->parent == NULL) printf("%d", node->currentCity);
-    else
-    {
-        printSolutionHelper(node->parent);
-        printf(" %d", node->currentCity);
+void printSolutionAux(const tspSmallNode_t* node) {
+    if (node->parent != NULL) {
+        printSolutionAux(node->parent);
+        putchar(' ');
     }
+    printf("%d", node->currentCity);
 }
 
-void printSolution(const tsp_t* tsp) {
-    const tspSolution_t* solution = &tsp->solution;
-    if (solution->hasSolution) {
-        printf("%.1f\n", solution->cost);
-        printSolutionHelper(solution->bestTour);
+void printSolution(const tspSolution_t solution) {
+    if (solution.hasSolution) {
+        printf("%.1f\n", solution.cost);
+        printSolutionAux(solution.bestTour);
         printf("\n");
     } else {
         printf("NO SOLUTION\n");
@@ -54,7 +50,7 @@ int main(int argc, char* argv[]) {
     LOG("inPath = %s", inPath);
     LOG("maxValue = %d", maxValue);
 
-    tsp_t tsp = parseInput(inPath, maxValue);
+    tsp_t tsp = parseInput(inPath);
     DEBUG(tspPrint(&tsp));
 
     double execTime = -omp_get_wtime();
@@ -62,7 +58,7 @@ int main(int argc, char* argv[]) {
     execTime += omp_get_wtime();
 
     fprintf(stderr, "%.1fs\n", execTime);
-    printSolution(&tsp);
+    printSolution(tsp.solution);
     tspDestroy(&tsp);
     return 0;
 }

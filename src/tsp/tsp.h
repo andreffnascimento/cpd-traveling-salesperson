@@ -5,12 +5,20 @@
 
 #define NONEXISTENT_ROAD_VALUE -1
 
-/*----------------------------------------------------------
-__________________________tsp Node ________________________
-----------------------------------------------------------*/
+/***********************************************************
+-------------------------- TSP -----------------------------
+***********************************************************/
+
+typedef struct tspSmallNode {
+    struct tspSmallNode* parent;
+    int currentCity;
+} tspSmallNode_t;
+
+tspSmallNode_t* tspCreateSmallNode(tspSmallNode_t* parent, int currentCity);
+void tspDestroySmallNode(tspSmallNode_t* node);
 
 typedef struct tspNode {
-    struct tspNode* parent;
+    tspSmallNode_t *parent;
     double cost;
     double lb;
     int length;
@@ -18,17 +26,14 @@ typedef struct tspNode {
 
 } tspNode_t;
 
-tspNode_t* tspCreateNode(tspNode_t* tour, double cost, double lb, int length, int currentCity);
+tspNode_t* tspCreateNode(tspSmallNode_t* parent, double cost, double lb, int length, int currentCity);
 void tspDestroyNode(tspNode_t* node);
 
-/*----------------------------------------------------------
-_____________________________tsp___________________________
-----------------------------------------------------------*/
 
 typedef struct {
     bool hasSolution;
     double cost;
-    tspNode_t* bestTour;
+    tspSmallNode_t* bestTour;
 } tspSolution_t;
 
 typedef struct {
