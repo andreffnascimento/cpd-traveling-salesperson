@@ -21,18 +21,13 @@ tsp_t parseInput(const char* inPath) {
     return tsp;
 }
 
-void printSolutionAux(const tspSmallNode_t* node) {
-    if (node->parent != NULL) {
-        printSolutionAux(node->parent);
-        putchar(' ');
-    }
-    printf("%d", node->currentCity);
-}
-
 void printSolution(const tspSolution_t solution) {
     if (solution.hasSolution) {
         printf("%.1f\n", solution.cost);
-        printSolutionAux(solution.bestTour);
+        for(size_t i=0; i<solution.bestTour->size; i++){
+            if (i == solution.bestTour->size-1) printf("%d", solution.bestTour->tour[i]);
+            else printf("%d ", solution.bestTour->tour[i]);
+        } 
         printf("\n");
     } else {
         printf("NO SOLUTION\n");

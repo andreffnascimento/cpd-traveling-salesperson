@@ -22,7 +22,7 @@ MACROS 		    ?= -D__DEBUG__
 # Compiler flags
 CC   	  := gcc
 LD   	 	:= gcc
-CCFLAGS	:= -Wall -std=gnu99 -MD -O3
+CCFLAGS	:= -g -Wall -std=gnu99 -MD -O3
 LDFLAGS	:= -lm -fopenmp
 
 # Source Objects

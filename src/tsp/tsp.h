@@ -9,38 +9,32 @@
 -------------------------- TSP -----------------------------
 ***********************************************************/
 
-typedef struct tspSmallNode {
-    struct tspSmallNode* parent;
-    int currentCity;
-} tspSmallNode_t;
-
-tspSmallNode_t* tspCreateSmallNode(tspSmallNode_t* parent, int currentCity);
-void tspDestroySmallNode(tspSmallNode_t* node);
 
 typedef struct tspNode {
-    tspSmallNode_t *parent;
+    // tspSmallNode_t *parent;
     double cost;
     double lb;
     int length;
     int currentCity;
+    int *tour;
+    int size;
 
 } tspNode_t;
 
-tspNode_t* tspCreateNode(tspSmallNode_t* parent, double cost, double lb, int length, int currentCity);
+tspNode_t* tspCreateNode(double cost, double lb, int length, int currentCity, int maxSize);
 void tspDestroyNode(tspNode_t* node);
 
 
 typedef struct {
     bool hasSolution;
     double cost;
-    tspSmallNode_t* bestTour;
+    tspNode_t* bestTour;
 } tspSolution_t;
 
 typedef struct {
     size_t nCities;
     size_t nRoads;
     double** roadCosts;
-    priorityQueue_t trashQueue;
     priorityQueue_t queue;
     tspSolution_t solution;
 } tsp_t;
