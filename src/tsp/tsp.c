@@ -37,6 +37,11 @@ void tspDestroy(tsp_t *tsp) {
         if (node == NULL) break;   
         tspDestroyNode(node);
     }
+    while(true) {
+        tspNode_t *node = queuePop(&tsp->queue);     
+        if (node == NULL) break;   
+        tspDestroyNode(node);
+    }
     for (size_t i = 0; i < tsp->nCities; i++) free(tsp->roadCosts[i]);
     free(tsp->roadCosts);
     queueDelete(&tsp->queue);
@@ -151,7 +156,7 @@ void tspSolve(tsp_t *tsp, int maxValue) {
     queuePush(&tsp->trashQueue, startSmallNode);
     
     while (true) {
-        tspNode_t *node = queuePop(&tsp->queue);
+        node = queuePop(&tsp->queue);
         if (node == NULL) return;
 
         if (node->lb >= maxValue) {
