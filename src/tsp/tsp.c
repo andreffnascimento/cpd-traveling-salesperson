@@ -98,7 +98,6 @@ static double _calculateInitialLb(const tsp_t* tsp) {
         }
         sum += min1 + min2;
     }
-    // printf("Initial Lb %le\n", sum/2);
     return sum / 2;
 }
 
@@ -130,7 +129,6 @@ static double _calculateLb(const tsp_t* tsp, const tspNode_t* node, int nextCity
     double costFromTo = tsp->roadCosts[node->currentCity][nextCity];
     double costFrom = (costFromTo >= min2From) ? min2From : min1From;
     double costTo = (costFromTo >= min2To) ? min2To : min1To;
-    // printf("Calculate Lb %le\n", node->lb + costFromTo - (costFrom + costTo) / 2);
     return node->lb + costFromTo - (costFrom + costTo) / 2;
 }
 
@@ -153,30 +151,24 @@ void tspSolve(tsp_t *tsp, int maxValue) {
     queuePush(&tsp->trashQueue, startSmallNode);
     
     while (true) {
-        node = queuePop(&tsp->queue);
+        tspNode_t *node = queuePop(&tsp->queue);
         if (node == NULL) return;
 
-        // printf("Popping Node %d\n", node->currentCity);
-
-        //smallNode = tspCreateSmallNode(node->parent, node->currentCity);
-        //queuePush(&tsp->trashQueue, smallNode);
-
         if (node->lb >= maxValue) {
-            // printf("Node->Lb bigger\n");
+            tspDestroyNode(node);
             return;
         }
 
         if (node->length == tsp->nCities && _isNeighbour(tsp, node->currentCity, 0)) {
             finalCost = node->cost + tsp->roadCosts[node->currentCity][0];
             if ((finalCost < maxValue) && (finalCost < tsp->solution.cost)) {
-                // printf("Im always here\n");
+
                 tspSmallNode_t *smallFinalNode = tspCreateSmallNode(node->parent, 0);
                 tspNode_t *finalNode = tspCreateNode(smallFinalNode, finalCost, _calculateLb(tsp, node, 0), node->length, 0);
                 
                 tsp->solution.hasSolution = true;
                 tsp->solution.bestTour = smallFinalNode;
                 tsp->solution.cost = finalNode->cost;
-                // printf("FinalCost %le\n", tsp->solution.cost);
                 
                 tspDestroyNode(finalNode);
                 queuePush(&tsp->trashQueue, smallFinalNode);
@@ -189,8 +181,6 @@ void tspSolve(tsp_t *tsp, int maxValue) {
                     lb = _calculateLb(tsp, node, cityNumber);
                     
                     if (lb > maxValue) continue;
-                    // printf("From city %d to city %d\n", node->currentCity, cityNumber);
-                    // printf("NextCost %le\n",node->cost + tsp->roadCosts[node->currentCity][cityNumber]);
 
                     tspSmallNode_t *nextSmallNode = tspCreateSmallNode(node->parent, cityNumber);
                     tspNode_t *nextNode = tspCreateNode(nextSmallNode, node->cost + tsp->roadCosts[node->currentCity][cityNumber], lb, node->length + 1, cityNumber);
@@ -200,7 +190,6 @@ void tspSolve(tsp_t *tsp, int maxValue) {
                 }
             }
         }
-        //TODO delete node
         tspDestroyNode(node);
     }
 }
