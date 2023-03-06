@@ -2,11 +2,10 @@
 #include <math.h>
 #include "utils/queue.h"
 
-int emptyFunc(void *a, void *b) {return 0;}
+static int _emptyFunc(void *a, void *b) {return 0;}
 
-int compFun(tspNode_t *n1, tspNode_t *n2) {
-    if (n1->lb <= n2->lb) return 0;
-    return 1;
+static int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
+    return (((tspNode_t*)tspNode1)->lb <= ((tspNode_t*)tspNode2)->lb) ? 0 : 1;
 }
 
 tsp_t tspCreate(size_t nCities, size_t nRoads) {
@@ -24,8 +23,8 @@ tsp_t tspCreate(size_t nCities, size_t nRoads) {
         }
     }
 
-    tsp.trashQueue = queueCreate(&emptyFunc);
-    tsp.queue = queueCreate(&compFun);
+    tsp.trashQueue = queueCreate(&_emptyFunc);
+    tsp.queue = queueCreate(&_tspNodeCompFun);
     tsp.solution.hasSolution = false;
     tsp.solution.cost = INFINITY;
     tsp.solution.bestTour = NULL;
@@ -67,10 +66,6 @@ tspNode_t *tspCreateNode(tspNode_t *parent, double cost, double lb, int length, 
 void tspDestroyNode(tspNode_t *node) {
     free(node);
     node=NULL;
-}
-
-static int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
-    return (((tspNode_t*)tspNode1)->lb <= ((tspNode_t*)tspNode2)->lb) ? 0 : 1;
 }
 
 static bool _isNeighbour(const tsp_t* tsp, int cityA, int cityB) {
@@ -138,6 +133,7 @@ static bool _isCityInTour(const tspNode_t* node, int cityNumber) {
 
 void tspSolve(tsp_t *tsp, int maxValue) {
     tspNode_t *startNode = tspCreateNode(NULL, 0, _calculateInitialLb(tsp), 1, 0);
+    
     queuePush(&tsp->trashQueue,startNode);
     queuePush(&tsp->queue, startNode);
 
@@ -174,7 +170,8 @@ void tspSolve(tsp_t *tsp, int maxValue) {
                     queuePush(&tsp->trashQueue,nextNode);
                 }
             }
-            
         }
+        //TODO delete node
+
     }
 }
