@@ -168,7 +168,7 @@ void tspSolve(tsp_t *tsp, int maxValue) {
 
         if ((node->length == tsp->nCities) && _isNeighbour(tsp, node->currentCity, 0)) {
             finalCost = node->cost + tsp->roadCosts[node->currentCity][0];
-            if ((finalCost < maxValue) && (finalCost < tsp->solution.cost)) {
+            if (finalCost < maxValue) {
 
                 if (tsp->solution.hasSolution) tspDestroyNode(tsp->solution.bestTour);
 
@@ -180,7 +180,6 @@ void tspSolve(tsp_t *tsp, int maxValue) {
                 tsp->solution.bestTour = finalNode;
                 tsp->solution.cost = finalNode->cost;
                 maxValue = tsp->solution.cost;
-                //tspDestroyNode(finalNode);
             }
         }
         else {
