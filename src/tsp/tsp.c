@@ -161,7 +161,7 @@ void tspSolve(tsp_t *tsp, int maxValue) {
         node = queuePop(&tsp->queue);
         if (node == NULL) return;
 
-        if (node->lb > maxValue) {
+        if (node->lb >= maxValue) {
             tspDestroyNode(node);
             return;
         }
@@ -179,6 +179,7 @@ void tspSolve(tsp_t *tsp, int maxValue) {
                 tsp->solution.hasSolution = true;
                 tsp->solution.bestTour = finalNode;
                 tsp->solution.cost = finalNode->cost;
+                maxValue = tsp->solution.cost;
                 //tspDestroyNode(finalNode);
             }
         }
