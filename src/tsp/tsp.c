@@ -3,8 +3,16 @@
 #include "utils/queue.h"
 
 
-static int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
-    return (((tspNode_t*)tspNode1)->lb <= ((tspNode_t*)tspNode2)->lb) ? 0 : 1;
+// static int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
+//     return (((tspNode_t*)tspNode1)->lb <= ((tspNode_t*)tspNode2)->lb) ? 0 : 1;
+// }
+int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
+    tspNode_t *n1,*n2;
+    n1 = (tspNode_t*)tspNode1;
+    n2 = (tspNode_t*)tspNode2;
+    if (n1->lb > n2->lb) return 1;
+    else if ((n1->lb == n2->lb) && (n1->currentCity < n2->currentCity)) return 1;
+    else return 0;
 }
 
 tsp_t tspCreate(size_t nCities, size_t nRoads) {
@@ -12,7 +20,7 @@ tsp_t tspCreate(size_t nCities, size_t nRoads) {
     tsp.nCities = nCities;
     tsp.nRoads = nRoads;
 
-    // Initialization of the Roads to Null
+    // Initialization of th\e Roads to Null
     tsp.roadCosts = (double **)malloc(tsp.nRoads * sizeof(double *));
     for (size_t i = 0; i < tsp.nCities; i++) {
         tsp.roadCosts[i] = (double *)malloc(tsp.nRoads * sizeof(double));
@@ -50,15 +58,21 @@ void tspPrint(const tsp_t* tsp) {
             printf(" - Road { %ld <-> %ld (cost = %f) }\n", i, j, tsp->roadCosts[i][j]);
 }
 
-tspNode_t *tspCreateNode(double cost, double lb, int length, int currentCity, int maxSize) {
+tspNode_t *tspCreateNode(tspNode_t *parent, double cost, double lb, int length, int currentCity) {
 
-    tspNode_t *node = malloc(sizeof(tspNode_t));
+    tspNode_t *node = (tspNode_t *)malloc(sizeof(tspNode_t));
     node->cost = cost;
     node->lb = lb;
     node->length = length;
     node->currentCity = currentCity;
-    node->tour = (int *)malloc(sizeof(int) * maxSize);
-    node->size = 0;
+    if (parent == NULL) {
+        node->tour = (int *)malloc(sizeof(int));
+        node->size = 0;
+    }
+    else {
+        node->tour = (int *)malloc(sizeof(int) * (parent->size + 1));
+        node->size = parent->size;
+    }
     return node;
 }
 
@@ -124,7 +138,7 @@ static double _calculateLb(const tsp_t* tsp, const tspNode_t* node, int nextCity
 
 static bool _isCityInTour(const tspNode_t* node, int cityNumber) {
     if (node->currentCity == cityNumber) return true;
-    for (size_t i = 0; i<node->size; i++){
+    for (size_t i = 0; i < node->size; i++) {
         if (node->tour[i] == cityNumber) return true;
     }
     return false;
@@ -136,10 +150,10 @@ void tspNodeCopyTour(tspNode_t *old, tspNode_t *new) {
 }
 
 void tspSolve(tsp_t *tsp, int maxValue) {
-    tspNode_t *startNode,*node;
+    tspNode_t *startNode, *node;
     double finalCost;
 
-    startNode = tspCreateNode(0, _calculateInitialLb(tsp), 1, 0, tsp->nCities+1);
+    startNode = tspCreateNode(NULL, 0, _calculateInitialLb(tsp), 1, 0);
     startNode->tour[startNode->size++] = 0;
     queuePush(&tsp->queue, startNode);
     
@@ -147,16 +161,18 @@ void tspSolve(tsp_t *tsp, int maxValue) {
         node = queuePop(&tsp->queue);
         if (node == NULL) return;
 
-        if (node->lb >= maxValue) {
+        if (node->lb > maxValue) {
             tspDestroyNode(node);
             return;
         }
 
-        if (node->length == tsp->nCities && _isNeighbour(tsp, node->currentCity, 0)) {
+        if ((node->length == tsp->nCities) && _isNeighbour(tsp, node->currentCity, 0)) {
             finalCost = node->cost + tsp->roadCosts[node->currentCity][0];
             if ((finalCost < maxValue) && (finalCost < tsp->solution.cost)) {
 
-                tspNode_t *finalNode = tspCreateNode(finalCost, _calculateLb(tsp, node, 0), node->length, 0, tsp->nCities+1);
+                if (tsp->solution.hasSolution) tspDestroyNode(tsp->solution.bestTour);
+
+                tspNode_t *finalNode = tspCreateNode(node, finalCost, _calculateLb(tsp, node, 0), node->length, 0);
                 tspNodeCopyTour(node, finalNode);
                 finalNode->tour[finalNode->size++] = 0;
                 
@@ -170,11 +186,11 @@ void tspSolve(tsp_t *tsp, int maxValue) {
             double lb;
             for (size_t cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {   
                 if (_isNeighbour(tsp, node->currentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
-                    lb = _calculateLb(tsp, node, cityNumber);
                     
+                    lb = _calculateLb(tsp, node, cityNumber);
                     if (lb > maxValue) continue;
 
-                    tspNode_t *nextNode = tspCreateNode(node->cost + tsp->roadCosts[node->currentCity][cityNumber], lb, node->length + 1, cityNumber, tsp->nCities+1);
+                    tspNode_t *nextNode = tspCreateNode(node, node->cost + tsp->roadCosts[node->currentCity][cityNumber], lb, node->length + 1, cityNumber);
                     tspNodeCopyTour(node, nextNode);
                     nextNode->tour[nextNode->size++] = cityNumber;
 

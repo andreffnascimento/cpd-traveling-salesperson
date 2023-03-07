@@ -11,17 +11,16 @@
 
 
 typedef struct tspNode {
-    // tspSmallNode_t *parent;
     double cost;
     double lb;
     int length;
     int currentCity;
-    int *tour;
+    int* tour;
     int size;
 
 } tspNode_t;
 
-tspNode_t* tspCreateNode(double cost, double lb, int length, int currentCity, int maxSize);
+tspNode_t* tspCreateNode(tspNode_t *parent, double cost, double lb, int length, int currentCity);
 void tspDestroyNode(tspNode_t* node);
 
 

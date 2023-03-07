@@ -21,12 +21,12 @@ tsp_t parseInput(const char* inPath) {
     return tsp;
 }
 
-void printSolution(const tspSolution_t solution) {
-    if (solution.hasSolution) {
-        printf("%.1f\n", solution.cost);
-        for(size_t i=0; i<solution.bestTour->size; i++){
-            if (i == solution.bestTour->size-1) printf("%d", solution.bestTour->tour[i]);
-            else printf("%d ", solution.bestTour->tour[i]);
+void printSolution(const tspSolution_t *solution) {
+    if (solution->hasSolution) {
+        printf("%.1f\n", solution->cost);
+        for(size_t i=0; i<solution->bestTour->size; i++){
+            if (i == solution->bestTour->size-1) printf("%d", solution->bestTour->tour[i]);
+            else printf("%d ", solution->bestTour->tour[i]);
         } 
         printf("\n");
     } else {
@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
     execTime += omp_get_wtime();
 
     fprintf(stderr, "%.1fs\n", execTime);
-    printSolution(tsp.solution);
+    printSolution(&tsp.solution);
     tspDestroy(&tsp);
     return 0;
 }
