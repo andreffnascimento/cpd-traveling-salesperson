@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [[ $# != 0 ]] ; then
+if [ $# != 0 ] ; then
 	echo "Usage: sh ${0}"
 	exit 1
 fi
