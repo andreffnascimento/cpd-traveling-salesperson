@@ -8,7 +8,7 @@ tsp_t parseInput(const char* inPath) {
     fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
     tsp_t tsp = tspCreate(nCities, nRoads);
 
-    for (int i = 0; i < tsp.nRoads; i++) {
+    for (size_t i = 0; i < tsp.nRoads; i++) {
         int cityA, cityB;
         double cost;
         fscanf(inputFile, "%d %d %le\n", &cityA, &cityB, &cost);

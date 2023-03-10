@@ -10,11 +10,11 @@
 typedef struct tspNode {
     double cost;
     double lb;
-    int length;
+    size_t length;
     int* tour;
 } tspNode_t;
 
-tspNode_t* tspNodeCreate(tspNode_t* parent, double cost, double lb, int length, int currentCity);
+tspNode_t* tspNodeCreate(double cost, double lb, int length, int currentCity);
 void tspNodeCopyTour(const tspNode_t* parent, tspNode_t* child);
 void tspNodeDestroy(tspNode_t* node);
 void tspNodePrint(const tspNode_t* node);

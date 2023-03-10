@@ -1,6 +1,6 @@
 #include "tspNode.h"
 
-tspNode_t* tspNodeCreate(tspNode_t* parent, double cost, double lb, int length, int currentCity) {
+tspNode_t* tspNodeCreate(double cost, double lb, int length, int currentCity) {
     tspNode_t* node = (tspNode_t*)malloc(sizeof(tspNode_t));
     node->cost = cost;
     node->lb = lb;
