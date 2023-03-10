@@ -8,7 +8,7 @@ tsp_t parseInput(const char* inPath) {
     fscanf(inputFile, "%lu %lu\n", &nCities, &nRoads);
     tsp_t tsp = tspCreate(nCities, nRoads);
 
-    for (int i = 0; i < tsp.nRoads; i++) {
+    for (size_t i = 0; i < tsp.nRoads; i++) {
         int cityA, cityB;
         double cost;
         fscanf(inputFile, "%d %d %le\n", &cityA, &cityB, &cost);
@@ -20,18 +20,15 @@ tsp_t parseInput(const char* inPath) {
     return tsp;
 }
 
-void printSolutionAux(const tspNode_t* node) {
-    if (node->parent != NULL) {
-        printSolutionAux(node->parent);
-        putchar(' ');
-    }
-    printf("%d", node->currentCity);
-}
-
-void printSolution(const tspSolution_t* solution) {
-    if (solution->hasSolution) {
+void printSolution(const tspNode_t* solution) {
+    if (solution != NULL) {
         printf("%.1f\n", solution->cost);
-        printSolutionAux(solution->bestTour);
+        for (size_t i = 0; i < solution->length; i++) {
+            if (i == solution->length - 1)
+                printf("%d", solution->tour[i]);
+            else
+                printf("%d ", solution->tour[i]);
+        }
         printf("\n");
     } else {
         printf("NO SOLUTION\n");
@@ -45,19 +42,21 @@ int main(int argc, char* argv[]) {
     }
 
     const char* inPath = argv[1];
-    int maxValue = atoi(argv[2]);
+    double maxTourCost = atoi(argv[2]);
     LOG("inPath = %s", inPath);
-    LOG("maxValue = %d", maxValue);
-
+    LOG("maxTourCost = %f", maxTourCost);
     tsp_t tsp = parseInput(inPath);
     DEBUG(tspPrint(&tsp));
 
     double execTime = -omp_get_wtime();
-    const tspSolution_t* solution = tspSolve(&tsp, maxValue);
+    tspNode_t* solution = tspSolve(&tsp, maxTourCost);
     execTime += omp_get_wtime();
 
     fprintf(stderr, "%.1fs\n", execTime);
     printSolution(solution);
+
+    if (solution != NULL)
+        tspNodeDestroy(solution);
     tspDestroy(&tsp);
     return 0;
 }

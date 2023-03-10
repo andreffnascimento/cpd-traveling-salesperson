@@ -45,7 +45,7 @@ priorityQueue_t queueDuplicate(priorityQueue_t* queue) {
     return duplicate;
 }
 
-void queueDestroy(priorityQueue_t* queue) {
+void queueDelete(priorityQueue_t* queue) {
     free(queue->buffer);
 }
 

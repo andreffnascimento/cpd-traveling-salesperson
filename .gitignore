@@ -7,8 +7,8 @@ workspace.code-workspace
 .vscode
 
 # Binaries
-/tsp
 bin/
+/tsp
 
 # Test Files
 test/res.txt

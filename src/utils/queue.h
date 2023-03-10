@@ -14,7 +14,7 @@ typedef struct {
 
 priorityQueue_t queueCreate(int (*cmpFun)(void*, void*));
 priorityQueue_t queueDuplicate(priorityQueue_t* queue);
-void queueDestroy(priorityQueue_t* queue);
+void queueDelete(priorityQueue_t* queue);
 void* queuePush(priorityQueue_t* queue, void* element);
 void* queuePop(priorityQueue_t* queue);
 void queuePrint(priorityQueue_t* queue, FILE* outFile, void (*printNodeFun)(FILE*, void*));
