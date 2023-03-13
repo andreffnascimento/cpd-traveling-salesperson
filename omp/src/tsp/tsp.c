@@ -21,15 +21,10 @@ tsp_t tspCreate(size_t nCities, size_t nRoads) {
             tsp.roadCosts[i][j] = NONEXISTENT_ROAD_VALUE;
     }
 
-    tsp.queue = queueCreate(&_tspNodeCompFun);
     return tsp;
 }
 
 void tspDestroy(tsp_t* tsp) {
-    tspNode_t* node;
-    while ((node = queuePop(&tsp->queue)) != NULL)
-        tspNodeDestroy(node);
-    queueDelete(&tsp->queue);
     for (size_t i = 0; i < tsp->nCities; i++)
         free(tsp->roadCosts[i]);
     free(tsp->roadCosts);
@@ -108,16 +103,17 @@ static bool _isCityInTour(const tspNode_t* node, int cityNumber) {
 tspNode_t* tspSolve(tsp_t* tsp, double maxTourCost) {
     tspNode_t* solution = NULL;
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
-    queuePush(&tsp->queue, startNode);
+    priorityQueue_t queue = queueCreate(_tspNodeCompFun);
+    queuePush(&queue, startNode);
 
     while (true) {
-        tspNode_t* node = queuePop(&tsp->queue);
+        tspNode_t* node = queuePop(&queue);
         if (node == NULL)
-            return solution;
+            break;
 
         if (node->lb >= maxTourCost) {
             tspNodeDestroy(node);
-            return solution;
+            break;
         }
 
         DEBUG(tspNodePrint(node));
@@ -142,10 +138,16 @@ tspNode_t* tspSolve(tsp_t* tsp, double maxTourCost) {
                     double cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
                     tspNode_t* nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
                     tspNodeCopyTour(node, nextNode);
-                    queuePush(&tsp->queue, nextNode);
+                    queuePush(&queue, nextNode);
                 }
             }
         }
         tspNodeDestroy(node);
     }
+
+    tspNode_t* node;
+    while ((node = queuePop(&queue)) != NULL)
+        tspNodeDestroy(node);
+    queueDelete(&queue);
+    return solution;
 }

@@ -7,7 +7,6 @@
 #include <string.h>
 #include <omp.h> 
 
-#include "utils/queue.h"
 #include "utils/debug.h"
 
 #endif // __INCLUDE_H__
