@@ -6,10 +6,10 @@
 workspace.code-workspace
 .vscode
 
-# Binaries
-bin/
-/tsp
+# Serial Binaries
+serial/bin/
+serial/tsp
 
-# Test Files
-test/res.txt
-test/time.txt
+# Omp Binaries
+omp/bin/
+omp/tsp
