@@ -39,7 +39,7 @@ sudo apt update && sudo apt upgrade
 sudo apt install build-essential
 ```
 
-- **Build** the executable file
+- **Build** the executable files (one for each version of the project)
 ```
 make clean
 make build
@@ -50,10 +50,11 @@ make build
 
 
 # Execution
-This section explains how to run the project:
+This section explains how to run each version of the project:
 
 - **Shell** command
 ```
+cd <version_dir>
 ./tsp <cities_file> <max_value>
 ```
 
