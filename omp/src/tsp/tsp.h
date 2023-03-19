@@ -14,11 +14,13 @@ typedef struct {
     size_t nCities;
     size_t nRoads;
     double** roadCosts;
+    tspNode_t* solution;
+    double bestTourCost;
 } tsp_t;
 
-tsp_t tspCreate(size_t nCities, size_t nRoads);
+tsp_t tspCreate(size_t nCities, size_t nRoads, double bestTourCost);
 void tspDestroy(tsp_t* tsp);
 void tspPrint(const tsp_t* tsp);
-tspNode_t* tspSolve(tsp_t* tsp, double maxTourCost);
+void tspSolve(tsp_t* tsp);
 
 #endif // __TSP_TSP_H__

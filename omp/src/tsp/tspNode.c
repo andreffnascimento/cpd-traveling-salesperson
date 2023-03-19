@@ -5,7 +5,7 @@ tspNode_t* tspNodeCreate(double cost, double lb, int length, int currentCity) {
     node->cost = cost;
     node->lb = lb;
     node->length = length;
-    node->tour = (int*)malloc(sizeof(int) * node->length);
+    node->tour = (size_t*)malloc(sizeof(size_t) * node->length);
     node->tour[node->length - 1] = currentCity;
     return node;
 }
@@ -22,8 +22,8 @@ void tspNodeDestroy(tspNode_t* node) {
 }
 
 void tspNodePrint(const tspNode_t* node) {
-    printf("TSPNode{ currentCity = %d, cost = %f, lb = %f }\n - tour: ", tspNodeCurrentCity(node), node->cost, node->lb);
+    printf("TSPNode{ currentCity = %ld, cost = %f, lb = %f }\n - tour: ", tspNodeCurrentCity(node), node->cost, node->lb);
     for (size_t i = 0; i < node->length; i++)
-        printf("%d > ", node->tour[i]);
+        printf("%ld > ", node->tour[i]);
     printf("\n");
 }
