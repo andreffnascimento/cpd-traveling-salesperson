@@ -197,7 +197,7 @@ void tspSolve(tsp_t* tsp) {
     #pragma omp single    
     #pragma omp task
     {
-    processNode(tsp);
+        processNode(tsp);
     }
 
 }
