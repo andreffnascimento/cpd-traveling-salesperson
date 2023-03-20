@@ -14,6 +14,7 @@ tsp_t tspCreate(size_t nCities, size_t nRoads, double bestTourCost) {
     tsp.nRoads = nRoads;
     tsp.bestTourCost = bestTourCost;
     tsp.solution = NULL;
+    tsp.queue = queueCreate(_tspNodeCompFun); //TODO: future initialize with N number of Cores, maybe static var
 
     // Initialization of th\e Roads to Null
     tsp.roadCosts = (double**)malloc(tsp.nRoads * sizeof(double*));
@@ -29,8 +30,14 @@ tsp_t tspCreate(size_t nCities, size_t nRoads, double bestTourCost) {
 void tspDestroy(tsp_t* tsp) {
     for (size_t i = 0; i < tsp->nCities; i++)
         free(tsp->roadCosts[i]);
+    
     free(tsp->roadCosts);
     tsp->roadCosts = NULL;
+    
+    tspNode_t* node;
+    while ((node = queuePop(&tsp->queue)) != NULL)
+        tspNodeDestroy(node);
+    queueDelete(&tsp->queue);
 }
 
 void tspPrint(const tsp_t* tsp) {
@@ -102,10 +109,10 @@ static bool _isCityInTour(const tspNode_t* node, size_t cityNumber) {
     return false;
 }
 
-static bool verifyNode(tspNode_t* node, double bestTourCost) {
+bool verifyNode(tsp_t*tsp, tspNode_t* node) {
 
     if (!node) return false;
-    else if (node->lb >= bestTourCost) {
+    else if (node->lb >= tsp->bestTourCost) {
         tspNodeDestroy(node);
         return false;
     }
@@ -115,6 +122,7 @@ static bool verifyNode(tspNode_t* node, double bestTourCost) {
 
 bool updateBestTour(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
     bool res = false;
+    // #pragma omp single
     if ((node->length == tsp->nCities) && _isNeighbour(tsp, nodeCurrentCity, 0)) {
         double cost = node->cost + tsp->roadCosts[nodeCurrentCity][0];
 
@@ -126,76 +134,71 @@ bool updateBestTour(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
             tsp->solution = tspNodeCreate(cost, _calculateLb(tsp, node, 0), node->length + 1, 0);
             tspNodeCopyTour(node, tsp->solution);
 
-            // #pragma omp atomic
+            #pragma omp atomic write
             tsp->bestTourCost = cost;
         }
     }
     return res;
 }
 
+void visitNeighbours(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
+    size_t cityNumber;
+    tspNode_t* nextNode;
+    double lb, cost;
+    // #pragma omp for private(cityNumber, lb, cost, nextNode)
+    for (cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
+        if (_isNeighbour(tsp, nodeCurrentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
+            lb = _calculateLb(tsp, node, cityNumber);
+
+            if (lb > tsp->bestTourCost) continue;
+
+            cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
+            nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
+            tspNodeCopyTour(node, nextNode);
+
+            #pragma omp critical(queue)
+            queuePush(&tsp->queue, nextNode);
+        }
+    }
+}
+
+void processNode(tsp_t* tsp, tspNode_t* node) {
+    size_t nodeCurrentCity;
+        
+    nodeCurrentCity = tspNodeCurrentCity(node);
+
+    if (updateBestTour(tsp, node, nodeCurrentCity));
+    else {
+        visitNeighbours(tsp, node, nodeCurrentCity);
+    }
+    tspNodeDestroy(node);
+
+}
+
 void tspSolve(tsp_t* tsp) {
 
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
-    priorityQueue_t queue = queueCreate(_tspNodeCompFun);
-    tspNode_t* node;
-    size_t nodeCurrentCity;
-    size_t cityNumber;
-    double lb, cost;
-    tspNode_t* nextNode;
-    queuePush(&queue, startNode);
+    queuePush(&tsp->queue, startNode);
+    bool global = true;
 
+    printf("NumThreads %d\n", omp_get_num_threads());
     #pragma omp parallel
-    #pragma omp single
-    while (true) {
-
-        #pragma omp critical(queue)
-        node = queuePop(&queue);
-
-        if (node == NULL) break;
-
-        if (node->lb >= tsp->bestTourCost) {
-            tspNodeDestroy(node);
-            break;
-        }
-
-        // #pragma omp single
-        nodeCurrentCity = tspNodeCurrentCity(node);
-
-        if ((node->length == tsp->nCities) && _isNeighbour(tsp, nodeCurrentCity, 0)) {
-            double cost = node->cost + tsp->roadCosts[nodeCurrentCity][0];
-
-            if (cost < tsp->bestTourCost) {
-                if (tsp->solution != NULL)
-                    tspNodeDestroy(tsp->solution);
-
-                tsp->solution = tspNodeCreate(cost, _calculateLb(tsp, node, 0), node->length + 1, 0);
-                tspNodeCopyTour(node, tsp->solution);
-                
-                tsp->bestTourCost = cost;
+    printf("NumThreads %d\n", omp_get_num_threads());
+    while (global) {
+        #pragma omp single
+        {
+            printf("Running Thread %d\n", omp_get_thread_num());
+            tspNode_t* node = NULL;
+            #pragma omp task depend(out: node)
+            #pragma omp critical(queue)
+            node = queuePop(&tsp->queue);
+            
+            #pragma omp task depend(in: node)
+            {
+                if (!verifyNode(tsp, node)) global = false;
+                else processNode(tsp, node);
             }
 
-        } else {
-            // #pragma omp for
-            for (cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
-                if (_isNeighbour(tsp, nodeCurrentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
-
-                    lb = _calculateLb(tsp, node, cityNumber);
-
-                    if (lb > tsp->bestTourCost) continue;
-
-                    cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
-                    nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
-                    tspNodeCopyTour(node, nextNode);
-                    queuePush(&queue, nextNode);
-                }
-            }
         }
-        tspNodeDestroy(node);
     }
-    
-    // tspNode_t* node;
-    while ((node = queuePop(&queue)) != NULL)
-        tspNodeDestroy(node);
-    queueDelete(&queue);
-    // return solution;
 }

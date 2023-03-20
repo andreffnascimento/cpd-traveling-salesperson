@@ -3,6 +3,7 @@
 
 #include "include.h"
 #include "tspNode.h"
+#include "utils/queue.h"
 
 #define NONEXISTENT_ROAD_VALUE -1
 
@@ -15,6 +16,7 @@ typedef struct {
     size_t nRoads;
     double** roadCosts;
     tspNode_t* solution;
+    priorityQueue_t queue;
     double bestTourCost;
 } tsp_t;
 

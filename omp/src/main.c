@@ -41,7 +41,6 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    omp_set_num_threads(4);
     const char* inPath = argv[1];
     double bestTourCost = atoi(argv[2]);
     LOG("inPath = %s", inPath);
