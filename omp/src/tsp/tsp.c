@@ -163,15 +163,18 @@ void visitNeighbours(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
 }
 
 void processNode(tsp_t* tsp, tspNode_t* node) {
-    size_t nodeCurrentCity;
-        
-    nodeCurrentCity = tspNodeCurrentCity(node);
+    #pragma omp task private(node)
+    {
+        size_t nodeCurrentCity;
+            
+        nodeCurrentCity = tspNodeCurrentCity(node);
 
-    if (updateBestTour(tsp, node, nodeCurrentCity));
-    else {
-        visitNeighbours(tsp, node, nodeCurrentCity);
+        if (updateBestTour(tsp, node, nodeCurrentCity));
+        else {
+            visitNeighbours(tsp, node, nodeCurrentCity);
+        }
+        tspNodeDestroy(node);
     }
-    tspNodeDestroy(node);
 
 }
 
@@ -180,25 +183,30 @@ void tspSolve(tsp_t* tsp) {
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
     queuePush(&tsp->queue, startNode);
     bool global = true;
+    tspNode_t* node = NULL;
 
-    printf("NumThreads %d\n", omp_get_num_threads());
+    // fprintf(stderr, "NumThreads %d\n", omp_get_num_threads());
     #pragma omp parallel
-    printf("NumThreads %d\n", omp_get_num_threads());
+    fprintf(stderr, "NumThreads %d\n", omp_get_num_threads());
+    // #pragma omp single
     while (global) {
-        #pragma omp single
-        {
-            printf("Running Thread %d\n", omp_get_thread_num());
-            tspNode_t* node = NULL;
-            #pragma omp task depend(out: node)
+        // #pragma omp single
+        // {
+            fprintf(stderr, "Running Thread %d\n", omp_get_thread_num());
+            #pragma omp task depend(out: node) shared(node)
             #pragma omp critical(queue)
             node = queuePop(&tsp->queue);
             
-            #pragma omp task depend(in: node)
+            #pragma omp task depend(in: node) shared(node, global)
             {
-                if (!verifyNode(tsp, node)) global = false;
+                if (!verifyNode(tsp, node)) {
+                    // fprintf(stderr, "[!]Node Not Verified %d\n", omp_get_thread_num());
+                    
+                    #pragma atomic write
+                    global = false;
+                }
                 else processNode(tsp, node);
             }
-
-        }
+        // }
     }
 }
