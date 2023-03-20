@@ -2,6 +2,8 @@
 #include "utils/queue.h"
 #include <math.h>
 
+void processNode(tsp_t* tsp);
+
 static int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
     tspNode_t* n1 = (tspNode_t*)tspNode1;
     tspNode_t* n2 = (tspNode_t*)tspNode2;
@@ -158,55 +160,39 @@ void visitNeighbours(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
 
             #pragma omp critical(queue)
             queuePush(&tsp->queue, nextNode);
+            #pragma omp task
+            processNode(tsp);
         }
     }
 }
 
-void processNode(tsp_t* tsp, tspNode_t* node) {
-    #pragma omp task private(node)
-    {
-        size_t nodeCurrentCity;
-            
-        nodeCurrentCity = tspNodeCurrentCity(node);
+void processNode(tsp_t* tsp) {
+    tspNode_t* node = NULL;
 
-        if (updateBestTour(tsp, node, nodeCurrentCity));
-        else {
-            visitNeighbours(tsp, node, nodeCurrentCity);
-        }
-        tspNodeDestroy(node);
+    #pragma omp critical(queue)
+    node = queuePop(&tsp->queue);
+
+        if (!verifyNode(tsp, node)) {
+            return;
     }
 
+    size_t nodeCurrentCity;
+        
+    nodeCurrentCity = tspNodeCurrentCity(node);
+
+    if (updateBestTour(tsp, node, nodeCurrentCity));
+    else {
+        visitNeighbours(tsp, node, nodeCurrentCity);
+    }
+    tspNodeDestroy(node);
 }
 
 void tspSolve(tsp_t* tsp) {
 
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
     queuePush(&tsp->queue, startNode);
-    bool global = true;
-    tspNode_t* node = NULL;
 
-    // fprintf(stderr, "NumThreads %d\n", omp_get_num_threads());
     #pragma omp parallel
-    fprintf(stderr, "NumThreads %d\n", omp_get_num_threads());
-    // #pragma omp single
-    while (global) {
-        // #pragma omp single
-        // {
-            fprintf(stderr, "Running Thread %d\n", omp_get_thread_num());
-            #pragma omp task depend(out: node) shared(node)
-            #pragma omp critical(queue)
-            node = queuePop(&tsp->queue);
-            
-            #pragma omp task depend(in: node) shared(node, global)
-            {
-                if (!verifyNode(tsp, node)) {
-                    // fprintf(stderr, "[!]Node Not Verified %d\n", omp_get_thread_num());
-                    
-                    #pragma atomic write
-                    global = false;
-                }
-                else processNode(tsp, node);
-            }
-        // }
-    }
+    #pragma omp task
+    processNode(tsp);
 }
