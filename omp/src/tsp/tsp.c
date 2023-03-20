@@ -167,13 +167,14 @@ void visitNeighbours(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
 }
 
 void processNode(tsp_t* tsp) {
+    // printf("NumThreads %d\n", omp_get_thread_num());
     tspNode_t* node = NULL;
 
     #pragma omp critical(queue)
     node = queuePop(&tsp->queue);
 
-        if (!verifyNode(tsp, node)) {
-            return;
+    if (!verifyNode(tsp, node)) {
+        return;
     }
 
     size_t nodeCurrentCity;
@@ -193,6 +194,10 @@ void tspSolve(tsp_t* tsp) {
     queuePush(&tsp->queue, startNode);
 
     #pragma omp parallel
+    #pragma omp single    
     #pragma omp task
+    {
     processNode(tsp);
+    }
+
 }
