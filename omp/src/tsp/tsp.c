@@ -144,21 +144,25 @@ double getBestTourCost(tsp_t* tsp) {
 
 bool updateBestTour(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
     bool res = false;
-    // #pragma omp single
     if ((node->length == tsp->nCities) && _isNeighbour(tsp, nodeCurrentCity, 0)) {
         double cost = node->cost + tsp->roadCosts[nodeCurrentCity][0];
 
         #pragma omp critical
         if (cost < getBestTourCost(tsp)) {
+            double lb;
+
+            lb = _calculateLb(tsp, node, 0);
+
+            #pragma omp atomic write
+            tsp->bestTourCost = cost;
+
             res = true;
             if (tsp->solution != NULL)
                 tspNodeDestroy(tsp->solution);
 
-            tsp->solution = tspNodeCreate(cost, _calculateLb(tsp, node, 0), node->length + 1, 0);
+            tsp->solution = tspNodeCreate(cost, lb, node->length + 1, 0);
             tspNodeCopyTour(node, tsp->solution);
 
-            #pragma omp atomic write
-            tsp->bestTourCost = cost;
         }
     }
     return res;
@@ -168,20 +172,20 @@ void visitNeighbours(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
     size_t cityNumber;
     tspNode_t* nextNode;
     double lb, cost;
-    // #pragma omp for
+
     for (cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
         if (_isNeighbour(tsp, nodeCurrentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
 
             lb = _calculateLb(tsp, node, cityNumber);
 
-            if (lb > getBestTourCost(tsp)) continue;
+            if (lb <= getBestTourCost(tsp)) {
+                cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
+                nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
+                tspNodeCopyTour(node, nextNode);
 
-            cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
-            nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
-            tspNodeCopyTour(node, nextNode);
-
-            #pragma omp task
-            processNode(tsp, nextNode);
+                #pragma omp task
+                processNode(tsp, nextNode);
+            }
         }
     }
 }
@@ -216,7 +220,7 @@ void tspSolve(tsp_t* tsp) {
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
 
     #pragma omp parallel
-    #pragma omp single    
+    #pragma omp single 
     #pragma omp task
     {
         processNode(tsp, startNode);
