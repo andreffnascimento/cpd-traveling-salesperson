@@ -21,13 +21,13 @@ tsp_t parseInput(const char* inPath) {
 }
 
 void printSolution(const tspNode_t* solution) {
-    if (solution != NULL) {
+    if (solution->lb != -1) {
         printf("%.1f\n", solution->cost);
         for (size_t i = 0; i < solution->length; i++) {
             if (i == solution->length - 1)
-                printf("%d", solution->tour[i]);
+                printf("%ld", 0L);
             else
-                printf("%d ", solution->tour[i]);
+                printf("%ld ", solution->tour[i]);
         }
         printf("\n");
     } else {
@@ -55,8 +55,7 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "%.1fs\n", execTime);
     printSolution(solution);
 
-    if (solution != NULL)
-        tspNodeDestroy(solution);
+    tspNodeDestroy(solution);
     tspDestroy(&tsp);
     return 0;
 }

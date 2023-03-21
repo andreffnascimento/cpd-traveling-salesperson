@@ -1,13 +1,13 @@
 #include "queue.h"
+#include <stdlib.h>
+#include <string.h>
 
-#define SWAP(x, y) \
-    void* tmp = x; \
-    x = y;         \
+#define SWAP(x, y)                                                                                                     \
+    void* tmp = x;                                                                                                     \
+    x = y;                                                                                                             \
     y = tmp
 
-static size_t _parentOf(size_t i) {
-    return (i - 1) / 2;
-}
+static size_t _parentOf(size_t i) { return (i - 1) / 2; }
 
 void _bubble_down(priorityQueue_t* queue, size_t node) {
     size_t leftChild = 2 * node + 1;
@@ -45,7 +45,10 @@ priorityQueue_t queueDuplicate(priorityQueue_t* queue) {
     return duplicate;
 }
 
-void queueDelete(priorityQueue_t* queue) {
+void queueDelete(priorityQueue_t* queue, void (*delFun)(void*)) {
+    if (delFun != NULL)
+        for (size_t i = 0; i < queue->size; i++)
+            delFun(queue->buffer[i]);
     free(queue->buffer);
 }
 
