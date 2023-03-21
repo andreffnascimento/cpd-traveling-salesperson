@@ -128,7 +128,7 @@ static bool _isCityInTour(const tspNode_t* node, size_t cityNumber) {
 bool verifyNode(tsp_t*tsp, tspNode_t* node) {
 
     if (!node) return false;
-    else if (node->lb >= tsp->bestTourCost) {
+    else if (node->lb > tsp->bestTourCost) {
         tspNodeDestroy(node);
         return false;
     }
@@ -168,8 +168,10 @@ void visitNeighbours(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
     size_t cityNumber;
     tspNode_t* nextNode;
     double lb, cost;
+    // #pragma omp for
     for (cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
         if (_isNeighbour(tsp, nodeCurrentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
+
             lb = _calculateLb(tsp, node, cityNumber);
 
             if (lb > getBestTourCost(tsp)) continue;
@@ -200,10 +202,12 @@ void processNode(tsp_t* tsp, tspNode_t* node) {
         
     nodeCurrentCity = tspNodeCurrentCity(node);
 
+    #pragma omp task
     if (updateBestTour(tsp, node, nodeCurrentCity));
     else {
         visitNeighbours(tsp, node, nodeCurrentCity);
     }
+    #pragma omp taskwait
     tspNodeDestroy(node);
 }
 
