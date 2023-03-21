@@ -2,7 +2,9 @@
 #include "utils/queue.h"
 #include <math.h>
 
-void processNode(tsp_t* tsp);
+size_t numExecutedThreads = 1;
+
+void processNode(tsp_t* tsp, tspNode_t* node);
 
 static int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
     tspNode_t* n1 = (tspNode_t*)tspNode1;
@@ -16,7 +18,7 @@ tsp_t tspCreate(size_t nCities, size_t nRoads, double bestTourCost) {
     tsp.nRoads = nRoads;
     tsp.bestTourCost = bestTourCost;
     tsp.solution = NULL;
-    tsp.queue = queueCreate(_tspNodeCompFun); //TODO: future initialize with N number of Cores, maybe static var
+    // tsp.queue = queueCreate(_tspNodeCompFun); //TODO: future initialize with N number of Cores, maybe static var
 
     // Initialization of th\e Roads to Null
     tsp.roadCosts = (double**)malloc(tsp.nRoads * sizeof(double*));
@@ -25,7 +27,17 @@ tsp_t tspCreate(size_t nCities, size_t nRoads, double bestTourCost) {
         for (size_t j = 0; j < tsp.nCities; j++)
             tsp.roadCosts[i][j] = NONEXISTENT_ROAD_VALUE;
     }
+    
+    #pragma omp parallel
+    #pragma omp single
+    {
+       numExecutedThreads = omp_get_num_threads();
+    }
 
+    tsp.queues = (priorityQueue_t*) malloc(numExecutedThreads * sizeof(priorityQueue_t));
+    for (size_t i = 0; i < numExecutedThreads; i++) {
+        tsp.queues[i] = queueCreate(_tspNodeCompFun);
+    }
     return tsp;
 }
 
@@ -37,9 +49,11 @@ void tspDestroy(tsp_t* tsp) {
     tsp->roadCosts = NULL;
     
     tspNode_t* node;
-    while ((node = queuePop(&tsp->queue)) != NULL)
-        tspNodeDestroy(node);
-    queueDelete(&tsp->queue);
+    for (size_t i=0; i<numExecutedThreads; i++) {
+        while ((node = queuePop(&tsp->queues[i])) != NULL)
+            tspNodeDestroy(node);
+        queueDelete(&tsp->queues[i]);
+    }
 }
 
 void tspPrint(const tsp_t* tsp) {
@@ -121,6 +135,12 @@ bool verifyNode(tsp_t*tsp, tspNode_t* node) {
     return true;
 
 }
+double getBestTourCost(tsp_t* tsp) {
+    double val;
+    #pragma omp atomic read
+    val = tsp->bestTourCost;
+    return val;
+}
 
 bool updateBestTour(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
     bool res = false;
@@ -128,7 +148,8 @@ bool updateBestTour(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
     if ((node->length == tsp->nCities) && _isNeighbour(tsp, nodeCurrentCity, 0)) {
         double cost = node->cost + tsp->roadCosts[nodeCurrentCity][0];
 
-        if (cost < tsp->bestTourCost) {
+        #pragma omp critical
+        if (cost < getBestTourCost(tsp)) {
             res = true;
             if (tsp->solution != NULL)
                 tspNodeDestroy(tsp->solution);
@@ -147,31 +168,29 @@ void visitNeighbours(tsp_t* tsp, tspNode_t* node, size_t nodeCurrentCity) {
     size_t cityNumber;
     tspNode_t* nextNode;
     double lb, cost;
-    // #pragma omp for private(cityNumber, lb, cost, nextNode)
     for (cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
         if (_isNeighbour(tsp, nodeCurrentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
             lb = _calculateLb(tsp, node, cityNumber);
 
-            if (lb > tsp->bestTourCost) continue;
+            if (lb > getBestTourCost(tsp)) continue;
 
             cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
             nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
             tspNodeCopyTour(node, nextNode);
 
-            #pragma omp critical(queue)
-            queuePush(&tsp->queue, nextNode);
             #pragma omp task
-            processNode(tsp);
+            processNode(tsp, nextNode);
         }
     }
 }
 
-void processNode(tsp_t* tsp) {
-    // printf("NumThreads %d\n", omp_get_thread_num());
-    tspNode_t* node = NULL;
+void processNode(tsp_t* tsp, tspNode_t* node) {
+    int currentThread = omp_get_thread_num();
+    priorityQueue_t* queue = &tsp->queues[currentThread];
 
-    #pragma omp critical(queue)
-    node = queuePop(&tsp->queue);
+    queuePush(queue, node);
+    
+    node = queuePop(queue);
 
     if (!verifyNode(tsp, node)) {
         return;
@@ -191,13 +210,12 @@ void processNode(tsp_t* tsp) {
 void tspSolve(tsp_t* tsp) {
 
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
-    queuePush(&tsp->queue, startNode);
 
     #pragma omp parallel
     #pragma omp single    
     #pragma omp task
     {
-        processNode(tsp);
+        processNode(tsp, startNode);
     }
 
 }

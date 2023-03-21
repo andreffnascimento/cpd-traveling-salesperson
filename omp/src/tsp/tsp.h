@@ -16,7 +16,7 @@ typedef struct {
     size_t nRoads;
     double** roadCosts;
     tspNode_t* solution;
-    priorityQueue_t queue;
+    priorityQueue_t* queues;
     double bestTourCost;
 } tsp_t;
 
