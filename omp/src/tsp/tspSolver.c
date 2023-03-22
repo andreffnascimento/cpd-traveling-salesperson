@@ -1,4 +1,5 @@
 #include "tspSolver.h"
+#include <time.h>
 
 typedef struct {
     bool running;
@@ -30,6 +31,7 @@ tspSolver_t* tspSolverCreate(size_t nThreads, int (*cmpFun)(void*, void*)) {
     tspSolver->threads = (tspSolverThread_t*)malloc(nThreads * sizeof(tspSolverThread_t));
     for (size_t i = 0; i < nThreads; i++)
         _threadCreate(&tspSolver->threads[i], cmpFun);
+    srand(time(NULL));
     return tspSolver;
 }
 
@@ -82,9 +84,14 @@ void tspSolverSeqPush(tspSolver_t* tspSolver, void* element) {
     size_t threadNum;
 #pragma omp critical(tspSolverSeqThread)
     {
-        tspSolverSeqThread = (tspSolverSeqThread + 1) % tspSolver->nThreads;
+        tspSolverSeqThread = (tspSolverSeqThread +  1) % tspSolver-> nThreads;
         threadNum = tspSolverSeqThread;
     }
 
+    tspSolverIndexPush(tspSolver, threadNum, element);
+}
+
+void tspSolverRandPush(tspSolver_t* tspSolver, void* element) {
+    size_t threadNum = rand() % tspSolver->nThreads;
     tspSolverIndexPush(tspSolver, threadNum, element);
 }

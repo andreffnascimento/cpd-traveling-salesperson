@@ -141,7 +141,7 @@ static void _visitNeighbors(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t*
             double cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
             tspNode_t* nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
             tspNodeCopyTour(node, nextNode);
-            tspSolverSeqPush(tspSolver, nextNode);
+            tspSolverRandPush(tspSolver, nextNode);
         }
     }
 }
