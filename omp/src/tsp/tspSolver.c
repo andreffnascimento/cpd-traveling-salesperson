@@ -110,3 +110,22 @@ void tspSolverHighLBFirstPush(tspSolver_t* tspSolver, void* element) {
 
     tspSolverIndexPush(tspSolver, threadNum, element);
 }
+
+void tspSolverSeqTestPush(tspSolver_t* tspSolver, void* element) {
+    static size_t tspSolverSeqTestThread = 0;
+    size_t threadNum;
+#pragma omp critical(tspSolverSeqTestThread)
+    {
+        while (true) {
+            tspSolverSeqTestThread = (tspSolverSeqTestThread + 1) % tspSolver->nThreads;
+            if (omp_test_lock(&tspSolver->threads[tspSolverSeqTestThread].queueLock)) {
+                threadNum = tspSolverSeqTestThread;
+                break;
+            }
+        }
+    }
+
+    tspSolverThread_t* thread = &tspSolver->threads[threadNum];
+    queuePush(&thread->queue, element);
+    omp_unset_lock(&thread->queueLock);
+}

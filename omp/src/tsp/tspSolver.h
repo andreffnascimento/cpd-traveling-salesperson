@@ -22,5 +22,6 @@ void tspSolverIndexPush(tspSolver_t* tspSolver, size_t threadNum, void* element)
 void tspSolverSeqPush(tspSolver_t* tspSolver, void* element);
 void tspSolverRandPush(tspSolver_t* tspSolver, void* element);
 void tspSolverHighLBFirstPush(tspSolver_t* tspSolver, void* element);
+void tspSolverSeqTestPush(tspSolver_t* tspSolver, void* element);
 
 #endif // __TSP_THREADED_QUEUE_H__
