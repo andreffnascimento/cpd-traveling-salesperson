@@ -20,5 +20,6 @@ void tspNodeDestroy(tspNode_t* node);
 void tspNodePrint(const tspNode_t* node);
 
 inline size_t tspNodeCurrentCity(const tspNode_t* node) { return node->tour[node->length - 1]; }
+inline size_t tspNodePrevCity(const tspNode_t* node, size_t prev) { return node->tour[node->length - prev - 1]; }
 
 #endif // __TSP_TSP_NODE_H__

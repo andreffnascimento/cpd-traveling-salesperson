@@ -111,7 +111,7 @@ static tspNode_t* _getNextNode(priorityQueue_t* queue, double maxTourCost) {
 #pragma omp critical(queue)
     node = queuePop(queue);
 
-    if (node != NULL && node->lb >= maxTourCost) {
+    if (node != NULL && node->lb > maxTourCost) {
         tspNodeDestroy(node);
         return NULL;
     }
@@ -119,29 +119,28 @@ static tspNode_t* _getNextNode(priorityQueue_t* queue, double maxTourCost) {
 }
 
 static void _updateBestTour(const tsp_t* tsp, tspNode_t** solution, const tspNode_t* node) {
-    size_t nodeCurrentCity = tspNodeCurrentCity(node);
-    size_t solutionCurrentCity = tspNodeCurrentCity(*solution);
-    double cost = node->cost + tsp->roadCosts[nodeCurrentCity][0];
-    tspNode_t* oldSolution = *solution;
-    if (cost < oldSolution->cost || (cost == oldSolution->cost && nodeCurrentCity < solutionCurrentCity)) {
-        tspNode_t* newSolution = tspNodeCreate(cost, _calculateLb(tsp, node, 0), node->length + 1, nodeCurrentCity);
-        tspNodeCopyTour(node, newSolution);
-
 #pragma omp critical(solution)
-        {
+    {
+        tspNode_t* oldSolution = *solution;
+        size_t nodeCurrentCity = tspNodeCurrentCity(node);
+        size_t oldSolutionLastCity = tspNodePrevCity(oldSolution, 1);
+        double cost = node->cost + tsp->roadCosts[nodeCurrentCity][0];
+        if (cost < oldSolution->cost || (cost == oldSolution->cost && nodeCurrentCity < oldSolutionLastCity)) {
+            tspNode_t* newSolution = tspNodeCreate(cost, _calculateLb(tsp, node, 0), node->length + 1, 0);
+            tspNodeCopyTour(node, newSolution);
             *solution = newSolution;
             tspNodeDestroy(oldSolution);
         }
     }
 }
 
-static void _visitNeighbors(const tsp_t* tsp, priorityQueue_t* queue, const tspNode_t* solution,
-                            const tspNode_t* node) {
+static void _visitNeighbors(const tsp_t* tsp, priorityQueue_t* queue, tspNode_t** solution, const tspNode_t* node) {
+
     size_t nodeCurrentCity = tspNodeCurrentCity(node);
     for (size_t cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
         if (_isNeighbour(tsp, nodeCurrentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
             double lb = _calculateLb(tsp, node, cityNumber);
-            if (lb > solution->cost)
+            if (lb > (*solution)->cost)
                 continue;
             double cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
             tspNode_t* nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
@@ -154,29 +153,34 @@ static void _visitNeighbors(const tsp_t* tsp, priorityQueue_t* queue, const tspN
 }
 
 static void _processNode(const tsp_t* tsp, priorityQueue_t* queue, tspNode_t** solution, tspNode_t* node) {
-    DEBUG(tspNodePrint(node));
     size_t nodeCurrentCity = tspNodeCurrentCity(node);
     if ((node->length == tsp->nCities) && _isNeighbour(tsp, nodeCurrentCity, 0))
         _updateBestTour(tsp, solution, node);
     else
-        _visitNeighbors(tsp, queue, *solution, node);
+        _visitNeighbors(tsp, queue, solution, node);
     tspNodeDestroy(node);
 }
 
 tspNode_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
-    tspNode_t* solution = tspNodeCreate(maxTourCost, -1, 1, 0);
+    tspNode_t* solution = tspNodeCreate(maxTourCost, -1, 2, 0);
+    solution->tour[0] = tsp->nCities;
     priorityQueue_t queue = queueCreate(_tspNodeCompFun);
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
     queuePush(&queue, startNode);
 
 #pragma omp parallel
-    {
-        while (true) {
-            tspNode_t* node = _getNextNode(&queue, maxTourCost);
-            if (node == NULL)
-                break;
+#pragma omp single nowait
+    while (true) {
+        int nTasksQueued = 0;
+        tspNode_t* node = NULL;
+        while (nTasksQueued < omp_get_num_threads() && (node = _getNextNode(&queue, solution->cost)) != NULL) {
+            nTasksQueued++;
+#pragma omp task firstprivate(node)
             _processNode(tsp, &queue, &solution, node);
         }
+        if (nTasksQueued == 0)
+            break;
+#pragma omp taskwait
     }
 
     queueDelete(&queue, _queueDeleteFun);

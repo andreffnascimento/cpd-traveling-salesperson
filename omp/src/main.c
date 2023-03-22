@@ -21,11 +21,11 @@ tsp_t parseInput(const char* inPath) {
 }
 
 void printSolution(const tspNode_t* solution) {
-    if (solution->lb != -1) {
+    if (solution->lb != -1.0) {
         printf("%.1f\n", solution->cost);
         for (size_t i = 0; i < solution->length; i++) {
             if (i == solution->length - 1)
-                printf("%ld", 0L);
+                printf("%ld", solution->tour[i]);
             else
                 printf("%ld ", solution->tour[i]);
         }
