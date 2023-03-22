@@ -44,7 +44,7 @@ bool tspSolverRunning(const tspSolver_t* tspSolver) { return tspSolver->nThreads
 
 void tspSolverStartThread(tspSolver_t* tspSolver, size_t threadNum) {
     tspSolverThread_t* thread = &tspSolver->threads[threadNum];
-#pragma omp critical(threadStatus)
+#pragma omp critical(tspSolverThreadStatus)
     {
         if (!thread->running)
             tspSolver->nThreadsStoped--;
@@ -54,7 +54,7 @@ void tspSolverStartThread(tspSolver_t* tspSolver, size_t threadNum) {
 
 void tspSolverStopThread(tspSolver_t* tspSolver, size_t threadNum) {
     tspSolverThread_t* thread = &tspSolver->threads[threadNum];
-#pragma omp critical(threadStatus)
+#pragma omp critical(tspSolverThreadStatus)
     {
         if (thread->running)
             tspSolver->nThreadsStoped++;
@@ -75,4 +75,16 @@ void tspSolverIndexPush(tspSolver_t* tspSolver, size_t threadNum, void* element)
     omp_set_lock(&thread->queueLock);
     queuePush(&thread->queue, element);
     omp_unset_lock(&thread->queueLock);
+}
+
+void tspSolverSeqPush(tspSolver_t* tspSolver, void* element) {
+    static size_t tspSolverSeqThread = 0;
+    size_t threadNum;
+#pragma omp critical(tspSolverSeqThread)
+    {
+        tspSolverSeqThread = (tspSolverSeqThread + 1) % tspSolver->nThreads;
+        threadNum = tspSolverSeqThread;
+    }
+
+    tspSolverIndexPush(tspSolver, threadNum, element);
 }
