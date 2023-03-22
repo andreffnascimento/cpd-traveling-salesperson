@@ -52,6 +52,25 @@ void queueDelete(priorityQueue_t* queue, void (*delFun)(void*)) {
     free(queue->buffer);
 }
 
+void* queuePeek(priorityQueue_t* queue) {
+    if (queue->size == 0)
+        return NULL;
+
+    return queue->buffer[0];
+}
+
+void* queuePop(priorityQueue_t* queue) {
+    if (queue->size == 0)
+        return NULL;
+
+    void* element = queue->buffer[0];
+    queue->buffer[0] = queue->buffer[queue->size - 1];
+    --queue->size;
+
+    _bubble_down(queue, 0);
+    return element;
+}
+
 void* queuePush(priorityQueue_t* queue, void* element) {
     if (queue->size + 1 > queue->max_size) {
         queue->max_size += QUEUE_REALLOC_SIZE;
@@ -67,18 +86,6 @@ void* queuePush(priorityQueue_t* queue, void* element) {
         node = parent;
     }
 
-    return element;
-}
-
-void* queuePop(priorityQueue_t* queue) {
-    if (queue->size == 0)
-        return NULL;
-
-    void* element = queue->buffer[0];
-    queue->buffer[0] = queue->buffer[queue->size - 1];
-    --queue->size;
-
-    _bubble_down(queue, 0);
     return element;
 }
 

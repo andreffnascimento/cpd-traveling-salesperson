@@ -1,4 +1,5 @@
 #include "tspSolver.h"
+#include "tspNode.h"
 #include <time.h>
 
 typedef struct {
@@ -84,7 +85,7 @@ void tspSolverSeqPush(tspSolver_t* tspSolver, void* element) {
     size_t threadNum;
 #pragma omp critical(tspSolverSeqThread)
     {
-        tspSolverSeqThread = (tspSolverSeqThread +  1) % tspSolver-> nThreads;
+        tspSolverSeqThread = (tspSolverSeqThread + 1) % tspSolver->nThreads;
         threadNum = tspSolverSeqThread;
     }
 
@@ -93,5 +94,19 @@ void tspSolverSeqPush(tspSolver_t* tspSolver, void* element) {
 
 void tspSolverRandPush(tspSolver_t* tspSolver, void* element) {
     size_t threadNum = rand() % tspSolver->nThreads;
+    tspSolverIndexPush(tspSolver, threadNum, element);
+}
+
+void tspSolverHighLBFirstPush(tspSolver_t* tspSolver, void* element) {
+    size_t threadNum = 0;
+    double lbMax = 0.0;
+    for (size_t i = 1; i < tspSolver->nThreads; i++) {
+        tspNode_t* node = (tspNode_t*)queuePeek(&tspSolver->threads[i].queue);
+        if (node != NULL && node->lb > lbMax) {
+            threadNum = i;
+            lbMax = node->lb;
+        }
+    }
+
     tspSolverIndexPush(tspSolver, threadNum, element);
 }
