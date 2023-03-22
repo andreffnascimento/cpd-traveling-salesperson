@@ -11,6 +11,7 @@ MAKE_CMD=$(MAKE) --no-print-directory
 clean: clean-serial clean-omp
 compile: compile-serial compile-omp
 build: build-serial build-omp
+rebuild: rebuild-serial rebuild-omp
 
 
 
@@ -23,6 +24,10 @@ compile-serial:
 build-serial:
 	@ $(MAKE_CMD) build -C serial
 
+rebuild-serial:
+	@ $(MAKE_CMD) rebuild -C serial
+
+
 
 
 clean-omp:
@@ -33,3 +38,6 @@ compile-omp:
 
 build-omp:
 	@ $(MAKE_CMD) build -C omp
+
+rebuild-omp:
+	@ $(MAKE_CMD) rebuild -C omp

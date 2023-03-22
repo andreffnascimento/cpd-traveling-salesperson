@@ -32,7 +32,7 @@ FILES_OBJ	:= $(patsubst $(DIR_SRC)%.c, $(DIR_BIN)%.o, $(FILES_SRC))
 
 
 # Make Actions
-.PHONY: clean compile build
+.PHONY: clean compile build rebuild
 .DEFAULT_GOAL := build
 
 clean:
@@ -42,6 +42,8 @@ clean:
 compile: $(FILES_OBJ)
 
 build: $(EXE_NAME)
+
+rebuild: clean build
 
 
 

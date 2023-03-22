@@ -22,8 +22,7 @@ MACROS 		    ?= -D__DEBUG__
 # Compiler flags
 CC   	  := gcc
 LD   	 	:= gcc
-CCFLAGS	:= -g -pedantic -std=gnu99 -MD -O3 -fopenmp
-# CCFLAGS	:= -g -Wall -Wextra -Werror -pedantic -std=gnu99 -MD -O3 -fopenmp
+CCFLAGS	:= -g -Wall -Wextra -Werror -pedantic -std=gnu99 -MD -O3 -fopenmp
 LDFLAGS	:= -lm
 
 # Source Objects
@@ -33,7 +32,7 @@ FILES_OBJ	:= $(patsubst $(DIR_SRC)%.c, $(DIR_BIN)%.o, $(FILES_SRC))
 
 
 # Make Actions
-.PHONY: clean compile build
+.PHONY: clean compile build rebuild
 .DEFAULT_GOAL := build
 
 clean:
@@ -43,6 +42,8 @@ clean:
 compile: $(FILES_OBJ)
 
 build: $(EXE_NAME)
+
+rebuild: clean build
 
 
 
