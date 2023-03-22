@@ -5,6 +5,9 @@
 #include "tspNode.h"
 
 #define NONEXISTENT_ROAD_VALUE -1
+#define INITIAL_SOLUTION_SIZE 2
+#define INVALID_SOLUTION_LB -1.0
+
 
 /***********************************************************
 -------------------------- TSP -----------------------------

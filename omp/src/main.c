@@ -21,7 +21,7 @@ tsp_t parseInput(const char* inPath) {
 }
 
 void printSolution(const tspNode_t* solution) {
-    if (solution->lb != -1.0) {
+    if (solution->lb != INVALID_SOLUTION_LB) {
         printf("%.1f\n", solution->cost);
         for (size_t i = 0; i < solution->length; i++) {
             if (i == solution->length - 1)

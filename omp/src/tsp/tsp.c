@@ -162,8 +162,7 @@ static void _processNode(const tsp_t* tsp, priorityQueue_t* queue, tspNode_t** s
 }
 
 tspNode_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
-    tspNode_t* solution = tspNodeCreate(maxTourCost, -1, 2, 0);
-    solution->tour[0] = tsp->nCities;
+    tspNode_t* solution = tspNodeCreate(maxTourCost, INVALID_SOLUTION_LB, INITIAL_SOLUTION_SIZE, 0);
     priorityQueue_t queue = queueCreate(_tspNodeCompFun);
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
     queuePush(&queue, startNode);
