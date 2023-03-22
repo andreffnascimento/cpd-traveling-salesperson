@@ -22,7 +22,8 @@ MACROS 		    ?= -D__DEBUG__
 # Compiler flags
 CC   	  := gcc
 LD   	 	:= gcc
-CCFLAGS	:= -g -Wall -Wextra -Werror -pedantic -std=gnu99 -MD -O3 -fopenmp
+CCFLAGS	:= -g -pedantic -std=gnu99 -MD -O3 -fopenmp
+# CCFLAGS	:= -g -Wall -Wextra -Werror -pedantic -std=gnu99 -MD -O3 -fopenmp
 LDFLAGS	:= -lm
 
 # Source Objects
@@ -42,6 +43,7 @@ clean:
 compile: $(FILES_OBJ)
 
 build: $(EXE_NAME)
+
 
 
 

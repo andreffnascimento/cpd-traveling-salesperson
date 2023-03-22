@@ -1,5 +1,5 @@
 #include "tsp.h"
-#include "utils/queue.h"
+#include "tspSolver.h"
 #include <math.h>
 
 static int _tspNodeCompFun(void* tspNode1, void* tspNode2) {
@@ -105,12 +105,8 @@ static bool _isCityInTour(const tspNode_t* node, size_t cityNumber) {
     return false;
 }
 
-static tspNode_t* _getNextNode(priorityQueue_t* queue, double maxTourCost) {
-    tspNode_t* node;
-
-#pragma omp critical(queue)
-    node = queuePop(queue);
-
+static tspNode_t* _getNextNode(tspSolver_t* tspSolver, size_t index, double maxTourCost) {
+    tspNode_t* node = tspSolverIndexPop(tspSolver, index);
     if (node != NULL && node->lb > maxTourCost) {
         tspNodeDestroy(node);
         return NULL;
@@ -134,7 +130,7 @@ static void _updateBestTour(const tsp_t* tsp, tspNode_t** solution, const tspNod
     }
 }
 
-static void _visitNeighbors(const tsp_t* tsp, priorityQueue_t* queue, tspNode_t** solution, const tspNode_t* node) {
+static void _visitNeighbors(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t** solution, const tspNode_t* node) {
 
     size_t nodeCurrentCity = tspNodeCurrentCity(node);
     for (size_t cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
@@ -145,43 +141,46 @@ static void _visitNeighbors(const tsp_t* tsp, priorityQueue_t* queue, tspNode_t*
             double cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
             tspNode_t* nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
             tspNodeCopyTour(node, nextNode);
-
-#pragma omp critical(queue)
-            queuePush(queue, nextNode);
+            tspSolverIndexPush(tspSolver, omp_get_thread_num(), nextNode);
         }
     }
 }
 
-static void _processNode(const tsp_t* tsp, priorityQueue_t* queue, tspNode_t** solution, tspNode_t* node) {
+static void _processNode(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t** solution, tspNode_t* node) {
     size_t nodeCurrentCity = tspNodeCurrentCity(node);
     if ((node->length == tsp->nCities) && _isNeighbour(tsp, nodeCurrentCity, 0))
         _updateBestTour(tsp, solution, node);
     else
-        _visitNeighbors(tsp, queue, solution, node);
+        _visitNeighbors(tsp, tspSolver, solution, node);
     tspNodeDestroy(node);
 }
 
 tspNode_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     tspNode_t* solution = tspNodeCreate(maxTourCost, INVALID_SOLUTION_LB, INITIAL_SOLUTION_SIZE, 0);
-    priorityQueue_t queue = queueCreate(_tspNodeCompFun);
     tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
-    queuePush(&queue, startNode);
+    tspSolver_t* tspSolver;
 
 #pragma omp parallel
-#pragma omp single nowait
-    while (true) {
-        int nTasksQueued = 0;
-        tspNode_t* node = NULL;
-        while (nTasksQueued < omp_get_num_threads() && (node = _getNextNode(&queue, solution->cost)) != NULL) {
-            nTasksQueued++;
-#pragma omp task firstprivate(node)
-            _processNode(tsp, &queue, &solution, node);
+    {
+#pragma omp single
+        {
+            tspSolver = tspSolverCreate(omp_get_num_threads(), _tspNodeCompFun);
+            _processNode(tsp, tspSolver, &solution, startNode);
         }
-        if (nTasksQueued == 0)
-            break;
-#pragma omp taskwait
+
+        size_t threadNum = omp_get_thread_num();
+        while (tspSolverRunning(tspSolver)) {
+            tspNode_t* node = _getNextNode(tspSolver, threadNum, solution->cost);
+            if (node == NULL) {
+                tspSolverStopThread(tspSolver, threadNum);
+                continue;
+            }
+
+            tspSolverStartThread(tspSolver, threadNum);
+            _processNode(tsp, tspSolver, &solution, node);
+        }
     }
 
-    queueDelete(&queue, _queueDeleteFun);
+    tspSolverDestroy(tspSolver, _queueDeleteFun);
     return solution;
 }
