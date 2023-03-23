@@ -130,9 +130,11 @@ static void _updateBestTour(const tsp_t* tsp, tspNode_t** solution, const tspNod
     }
 }
 
-static void _visitNeighbors(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t** solution, const tspNode_t* node) {
+static void _processNode(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t** solution, tspNode_t* node);
 
+static void _visitNeighbors(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t** solution, const tspNode_t* node) {
     size_t nodeCurrentCity = tspNodeCurrentCity(node);
+    tspNode_t* nextNodeToExplore = NULL;
     for (size_t cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
         if (_isNeighbour(tsp, nodeCurrentCity, cityNumber) && !_isCityInTour(node, cityNumber)) {
             double lb = _calculateLb(tsp, node, cityNumber);
@@ -141,9 +143,15 @@ static void _visitNeighbors(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t*
             double cost = node->cost + tsp->roadCosts[nodeCurrentCity][cityNumber];
             tspNode_t* nextNode = tspNodeCreate(cost, lb, node->length + 1, cityNumber);
             tspNodeCopyTour(node, nextNode);
-            tspSolverSeqTestPush(tspSolver, nextNode);
+            if ((*solution)->lb != -1.0 && nextNodeToExplore == NULL)
+                nextNodeToExplore = nextNode;
+            else
+                tspSolverSeqTestPush(tspSolver, nextNode);
         }
     }
+
+    if (nextNodeToExplore != NULL)
+        _processNode(tsp, tspSolver, solution, nextNodeToExplore);
 }
 
 static void _processNode(const tsp_t* tsp, tspSolver_t* tspSolver, tspNode_t** solution, tspNode_t* node) {
