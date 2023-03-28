@@ -1,5 +1,5 @@
-#ifndef __UTILS_LOG_H__
-#define __UTILS_LOG_H__
+#ifndef __UTILS__LOG_H__
+#define __UTILS__LOG_H__
 
 #ifdef __DEBUG__
 #define LOG(X, ...) printf("[Debug]: " #X "\n", __VA_ARGS__)
@@ -11,4 +11,4 @@
 #define DEBUG(X)
 #endif
 
-#endif // __UTILS_LOG_H__
+#endif // __UTILS__LOG_H__

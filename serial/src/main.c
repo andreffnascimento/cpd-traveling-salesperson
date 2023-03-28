@@ -1,5 +1,6 @@
 #include "include.h"
 #include "tsp/tsp.h"
+#include "tsp/tspSolver.h"
 #include "utils/file.h"
 
 tsp_t parseInput(const char* inPath) {
@@ -20,16 +21,12 @@ tsp_t parseInput(const char* inPath) {
     return tsp;
 }
 
-void printSolution(const tspNode_t* solution) {
-    if (solution->lb != -1) {
+void printSolution(const tsp_t* tsp, const tspSolution_t* solution) {
+    if (solution->hasSolution) {
         printf("%.1f\n", solution->cost);
-        for (size_t i = 0; i < solution->length; i++) {
-            if (i == solution->length - 1)
-                printf("%ld", solution->tour[i]);
-            else
-                printf("%ld ", solution->tour[i]);
-        }
-        printf("\n");
+        for (size_t i = 0; i < tsp->nCities; i++)
+            printf("%ld ", solution->tour[i]);
+        printf("0\n");
     } else {
         printf("NO SOLUTION\n");
     }
@@ -49,13 +46,13 @@ int main(int argc, char* argv[]) {
     DEBUG(tspPrint(&tsp));
 
     double execTime = -omp_get_wtime();
-    tspNode_t* solution = tspSolve(&tsp, maxTourCost);
+    tspSolution_t solution = tspSolve(&tsp, maxTourCost);
     execTime += omp_get_wtime();
 
     fprintf(stderr, "%.1fs\n", execTime);
-    printSolution(solution);
+    printSolution(&tsp, &solution);
 
-    tspNodeDestroy(solution);
+    tspSolutionDestroy(&solution);
     tspDestroy(&tsp);
     return 0;
 }

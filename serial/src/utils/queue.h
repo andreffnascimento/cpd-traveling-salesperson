@@ -1,5 +1,5 @@
-#ifndef __UTILS_QUEUE_H__
-#define __UTILS_QUEUE_H__
+#ifndef __UTILS__QUEUE_H__
+#define __UTILS__QUEUE_H__
 
 #include <stdio.h>
 
@@ -19,4 +19,4 @@ void* queuePush(priorityQueue_t* queue, void* element);
 void* queuePop(priorityQueue_t* queue);
 void queuePrint(priorityQueue_t* queue, FILE* outFile, void (*printNodeFun)(FILE*, void*));
 
-#endif //__UTILS_QUEUE_H__
+#endif //__UTILS__QUEUE_H__

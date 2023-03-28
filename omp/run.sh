@@ -17,7 +17,7 @@ IN=${1}
 OUT_1=${PATH_OUT_1}/$(basename ${IN} .in).out
 OUT_2=${PATH_OUT_2}/$(basename ${IN} .in).out
 TEST=$(basename $IN)
-RUN=${PATH_DIR}/tsp
+RUN=${PATH_DIR}/tsp-omp
 MAX_VALUE=$(echo ${TEST} | sed -n "s/^.*-\([0-9]*\).*$/\1/p")
 
 ${RUN} ${IN} ${MAX_VALUE} 1> ${PATH_RES} 2> ${PATH_TIME}

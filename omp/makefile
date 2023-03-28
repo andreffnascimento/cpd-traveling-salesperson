@@ -2,28 +2,28 @@
 # - Author:		André Nascimento
 # - Github:		Arckenimuz
 # - Email:		andreffnascimento@outlook.com
-# - Version:	1.1
+# - Version:	1.2
 
 # Executable properties
 APP_NAME	:= CPD - Traveling Salesperson Problem
-EXE_NAME	:= tsp
+EXE_NAME	:= tsp-omp
+MACROS 		?= #-D__DEBUG__
 
 
 
 # Directory Paths
-ROOT_DIR	:= $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))/
-DIR_SRC 	:= src/
-DIR_BIN 	:= bin/
-
-# Compilation properties
-INCLUDES			:= -I$(ROOT_DIR)$(DIR_SRC)
-MACROS 		    ?= -D__DEBUG__
+PATH_MAKE		:= $(shell realpath $(firstword $(MAKEFILE_LIST)))
+ROOT_DIR_TEMP	:= $(shell echo ${PATH_MAKE} | sed -n "s:^\(.*\)makefile$$:\1:p")
+ROOT_DIR		:= $(shell echo ${ROOT_DIR_TEMP} | sed -e "s:[ ]:\\\\ :g")
+DIR_SRC 		:= src/
+DIR_BIN 		:= bin/
 
 # Compiler flags
-CC   	  := gcc
+CC   	  	:= gcc
 LD   	 	:= gcc
-CCFLAGS	:= -g -Wall -Wextra -pedantic -std=gnu99 -MD -O3 -fopenmp
-LDFLAGS	:= -lm
+CCFLAGS		:= -g -Wall -Wextra -pedantic -std=gnu99 -MD -O3 -fopenmp
+LDFLAGS		:= -lm
+INCLUDES	:= -I$(ROOT_DIR)$(DIR_SRC)
 
 # Source Objects
 FILES_SRC	:= $(shell find $(DIR_SRC) -type f -name "*.c")
