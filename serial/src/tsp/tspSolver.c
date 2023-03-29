@@ -1,92 +1,55 @@
 #include "tspSolver.h"
+#include "tspContainer.h"
+#include "tspNode.h"
 #include "utils/queue.h"
 #include <math.h>
 
-tspSolution_t tspSolutionCreate(size_t nCities, double maxTourCost) {
-    tspSolution_t solution;
-    solution.hasSolution = false;
-    solution.cost = maxTourCost;
-    solution.tour = (size_t*)malloc(nCities * sizeof(size_t));
+tspSolution_t* tspSolutionCreate(double maxTourCost) {
+    tspSolution_t* solution = (tspSolution_t*)malloc(sizeof(tspSolution_t));
+    solution->hasSolution = false;
+    solution->cost = maxTourCost;
     return solution;
 }
 
-void tspSolutionDestroy(tspSolution_t* solution) { free(solution->tour); }
+void tspSolutionDestroy(tspSolution_t* solution) { free(solution); }
 
 static int __tspNodeCompFun(void* el1, void* el2) {
-    tspNode_t* tspNode1 = (tspNode_t*)el1;
-    tspNode_t* tspNode2 = (tspNode_t*)el2;
-    return (tspNode2->lb < tspNode1->lb ||
-            ((tspNode2->lb == tspNode1->lb && tspNodeCurrentCity(tspNode2) < tspNodeCurrentCity(tspNode1))))
-               ? 1
-               : 0;
+    tspNode_t* tspNode1 = tspContainerEntryVal((tspContainerEntry_t*)el1);
+    tspNode_t* tspNode2 = tspContainerEntryVal((tspContainerEntry_t*)el2);
+    return (tspNode2->priority < tspNode1->priority ? 1 : 0);
 }
 
-static void __queueDeleteFun(void* el) {
-    tspNode_t* tspNode = (tspNode_t*)el;
-    free(tspNode);
-}
+// static void __queueDeleteFun(void* el) {
+//     tspNode_t* tspNode = (tspNode_t*)el;
+//     free(tspNode);
+// }
 
-static inline bool _isNeighbour(const tsp_t* tsp, size_t cityA, size_t cityB) {
-    return tsp->roadCosts[cityA][cityB] != NONEXISTENT_ROAD_VALUE;
-}
-
-static inline bool _isCityInTour(const tspNode_t* node, size_t cityNumber) {
+static inline bool _isCityInTour(const tspNode_t* node, int cityNumber) {
     return node->visited & (0x00000001 << cityNumber);
 }
 
-static tspNode_t* _getNextNode(priorityQueue_t* queue, double maxTourCost) {
-    tspNode_t* node = queuePop(queue);
+static tspContainerEntry_t* _getNextNode(priorityQueue_t* queue, double maxTourCost) {
+    tspContainerEntry_t* entry = queuePop(queue);
+    const tspNode_t* node = tspContainerEntryVal(entry);
     if (node != NULL && node->lb >= maxTourCost) {
-        tspNodeDestroy(node);
         return NULL;
     }
-    return node;
+    return entry;
 }
 
 static double _calculateInitialLb(const tsp_t* tsp) {
     double sum = 0.0;
-    for (size_t i = 0; i < tsp->nCities; i++) {
-        double min1 = INFINITY, min2 = INFINITY;
-        for (size_t j = 0; j < tsp->nCities; j++) {
-            double cost = tsp->roadCosts[i][j];
-            if (_isNeighbour(tsp, i, j)) {
-                if (cost < min1) {
-                    min2 = min1;
-                    min1 = cost;
-                } else if (cost < min2)
-                    min2 = cost;
-            }
-        }
-        sum += min1 + min2;
-    }
+    for (int i = 0; i < tsp->nCities; i++)
+        sum += tspMinCost(tsp, i, TSP_MIN_COSTS_1) + tspMinCost(tsp, i, TSP_MIN_COSTS_2);
     return sum / 2;
 }
 
-static double _calculateLb(const tsp_t* tsp, const tspNode_t* node, size_t nextCity) {
-    double min1From = INFINITY, min2From = INFINITY;
-    double min1To = INFINITY, min2To = INFINITY;
-    size_t nodeCurrentCity = tspNodeCurrentCity(node);
-    for (size_t i = 0; i < tsp->nCities; i++) {
-        if (_isNeighbour(tsp, i, nodeCurrentCity)) {
-            double costFrom = tsp->roadCosts[i][nodeCurrentCity];
-            if (costFrom < min1From) {
-                min2From = min1From;
-                min1From = costFrom;
-            } else if (costFrom < min2From) {
-                min2From = tsp->roadCosts[i][nodeCurrentCity];
-            }
-        }
-        if (_isNeighbour(tsp, i, nextCity)) {
-            double costTo = tsp->roadCosts[i][nextCity];
-            if (costTo < min1To) {
-                min2To = min1To;
-                min1To = costTo;
-            } else if (costTo < min2To) {
-                min2To = costTo;
-            }
-        }
-    }
-
+static double _calculateLb(const tsp_t* tsp, const tspNode_t* node, int nextCity) {
+    int nodeCurrentCity = tspNodeCurrentCity(node);
+    double min1From = tspMinCost(tsp, nodeCurrentCity, TSP_MIN_COSTS_1);
+    double min2From = tspMinCost(tsp, nodeCurrentCity, TSP_MIN_COSTS_2);
+    double min1To = tspMinCost(tsp, nextCity, TSP_MIN_COSTS_1);
+    double min2To = tspMinCost(tsp, nextCity, TSP_MIN_COSTS_2);
     double costFromTo = tsp->roadCosts[nodeCurrentCity][nextCity];
     double costFrom = (costFromTo >= min2From) ? min2From : min1From;
     double costTo = (costFromTo >= min2To) ? min2To : min1To;
@@ -94,9 +57,9 @@ static double _calculateLb(const tsp_t* tsp, const tspNode_t* node, size_t nextC
 }
 
 static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const tspNode_t* finalNode) {
-    size_t nodeCurrentCity = tspNodeCurrentCity(finalNode);
+    int nodeCurrentCity = tspNodeCurrentCity(finalNode);
     double cost = finalNode->cost + tsp->roadCosts[nodeCurrentCity][0];
-    bool isNewSolution = cost < solution->cost || !solution->hasSolution ||
+    bool isNewSolution = !solution->hasSolution || cost < solution->cost ||
                          (cost == solution->cost && nodeCurrentCity < solution->tour[tsp->nCities - 1]);
     if (isNewSolution) {
         DEBUG(tspNodePrint(finalNode));
@@ -106,53 +69,50 @@ static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const tsp
     }
 }
 
-static void _processNode(const tsp_t* tsp, priorityQueue_t* queue, tspSolution_t* solution, tspNode_t* node);
-
-static void _visitNeighbors(const tsp_t* tsp, priorityQueue_t* queue, tspSolution_t* solution,
-                            const tspNode_t* parent) {
-    size_t parentCurrentCity = tspNodeCurrentCity(parent);
-    tspNode_t* dfsNode = NULL;
-    for (size_t cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
-        if (_isNeighbour(tsp, parentCurrentCity, cityNumber) && !_isCityInTour(parent, cityNumber)) {
+static void _visitNeighbors(const tsp_t* tsp, tspContainer_t* container, priorityQueue_t* queue,
+                            tspSolution_t* solution, const tspNode_t* parent) {
+    int parentCurrentCity = tspNodeCurrentCity(parent);
+    for (int cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
+        if (tspIsNeighbour(tsp, parentCurrentCity, cityNumber) && !_isCityInTour(parent, cityNumber)) {
             double lb = _calculateLb(tsp, parent, cityNumber);
             if (lb > solution->cost)
                 continue;
             double cost = parent->cost + tsp->roadCosts[parentCurrentCity][cityNumber];
-            tspNode_t* nextNode = tspNodeExtend(parent, cost, lb, cityNumber);
-            if (!solution->hasSolution && dfsNode == NULL)
-                dfsNode = nextNode;
-            else
-                queuePush(queue, nextNode);
+            tspContainerEntry_t* nextEntry = tspContainerGetEntry(container);
+            tspNodeExtInit(tspContainerEntryVal(nextEntry), parent, cost, lb, cityNumber);
+            queuePush(queue, nextEntry);
         }
     }
-
-    if (dfsNode != NULL)
-        _processNode(tsp, queue, solution, dfsNode);
 }
 
-static void _processNode(const tsp_t* tsp, priorityQueue_t* queue, tspSolution_t* solution, tspNode_t* node) {
+static void _processNode(const tsp_t* tsp, tspContainer_t* container, priorityQueue_t* queue, tspSolution_t* solution,
+                         tspContainerEntry_t* entry) {
+    tspNode_t* node = tspContainerEntryVal(entry);
     DEBUG(tspNodePrint(node));
-    if ((node->length == tsp->nCities) && _isNeighbour(tsp, tspNodeCurrentCity(node), 0))
+    if ((node->length == tsp->nCities) && tspIsNeighbour(tsp, tspNodeCurrentCity(node), 0))
         _updateBestTour(tsp, solution, node);
     else
-        _visitNeighbors(tsp, queue, solution, node);
-    tspNodeDestroy(node);
+        _visitNeighbors(tsp, container, queue, solution, node);
+    tspContainerRemoveEntry(container, entry);
 }
 
-tspSolution_t tspSolve(const tsp_t* tsp, double maxTourCost) {
-    tspSolution_t solution = tspSolutionCreate(tsp->nCities, maxTourCost);
+tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
+    tspContainer_t* container = tspContainerCreate();
+    tspSolution_t* solution = tspSolutionCreate(maxTourCost);
     priorityQueue_t queue = queueCreate(__tspNodeCompFun);
-    tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
-    queuePush(&queue, startNode);
+
+    tspContainerEntry_t* startEntry = tspContainerGetEntry(container);
+    tspNodeInit(tspContainerEntryVal(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
+    _processNode(tsp, container, &queue, solution, startEntry);
 
     while (true) {
-        tspNode_t* node = _getNextNode(&queue, solution.cost);
-        if (node == NULL)
+        tspContainerEntry_t* entry = _getNextNode(&queue, solution->cost);
+        if (entry == NULL)
             break;
-        DEBUG(tspNodePrint(node));
-        _processNode(tsp, &queue, &solution, node);
+        _processNode(tsp, container, &queue, solution, entry);
     }
 
-    queueDelete(&queue, __queueDeleteFun);
+    queueDelete(&queue, NULL);
+    tspContainerDestroy(container);
     return solution;
 }

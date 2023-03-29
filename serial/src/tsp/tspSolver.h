@@ -5,13 +5,14 @@
 #include "tsp.h"
 
 typedef struct {
-	bool hasSolution;
+    bool hasSolution;
     double cost;
-    size_t* tour;
+    char tour[MAX_CITIES];
 } tspSolution_t;
 
-tspSolution_t tspSolutionCreate(size_t nCities, double maxTourCost);
+tspSolution_t* tspSolutionCreate(double maxTourCost);
 void tspSolutionDestroy(tspSolution_t* tspSolution);
-tspSolution_t tspSolve(const tsp_t* tsp, double maxTourCost);
+
+tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost);
 
 #endif // __TSP__TSP_SOLVER_H__
