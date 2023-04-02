@@ -1,9 +1,7 @@
-#ifndef __UTILS_QUEUE_H__
-#define __UTILS_QUEUE_H__
+#ifndef __UTILS__QUEUE_H__
+#define __UTILS__QUEUE_H__
 
-#include <stdio.h>
-
-#define QUEUE_REALLOC_SIZE 1024
+#include "include.h"
 
 typedef struct {
     void** buffer;
@@ -13,11 +11,8 @@ typedef struct {
 } priorityQueue_t;
 
 priorityQueue_t queueCreate(int (*cmpFun)(void*, void*));
-priorityQueue_t queueDuplicate(priorityQueue_t* queue);
 void queueDelete(priorityQueue_t* queue, void (*delFun)(void*));
-void* queuePeek(priorityQueue_t* queue);
-void* queuePop(priorityQueue_t* queue);
 void* queuePush(priorityQueue_t* queue, void* element);
-void queuePrint(priorityQueue_t* queue, FILE* outFile, void (*printNodeFun)(FILE*, void*));
+void* queuePop(priorityQueue_t* queue);
 
-#endif //__UTILS_QUEUE_H__
+#endif //__UTILS__QUEUE_H__

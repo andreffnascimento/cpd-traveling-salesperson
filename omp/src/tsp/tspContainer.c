@@ -12,8 +12,7 @@ typedef struct tspSubContainer {
 } tspSubContainer_t;
 
 struct tspContainer {
-    tspSubContainer_t* firstSubContainer;
-    tspSubContainer_t* lastSubContainer;
+    tspSubContainer_t* subContainers;
     tspContainerEntry_t* next;
 };
 
@@ -31,14 +30,13 @@ tspContainer_t* tspContainerCreate() {
     tspContainer_t* container = (tspContainer_t*)malloc(sizeof(tspContainer_t));
     tspSubContainer_t* subContainer = (tspSubContainer_t*)malloc(sizeof(tspSubContainer_t));
     _initSubContainer(subContainer);
-    container->firstSubContainer = subContainer;
-    container->lastSubContainer = subContainer;
-    container->next = &(container->firstSubContainer->entries[0]);
+    container->subContainers = subContainer;
+    container->next = &subContainer->entries[0];
     return container;
 }
 
 void tspContainerDestroy(tspContainer_t* container) {
-    tspSubContainer_t* subContainer = container->firstSubContainer;
+    tspSubContainer_t* subContainer = container->subContainers;
     while (subContainer != NULL) {
         tspSubContainer_t* temp = subContainer;
         subContainer = subContainer->next;
@@ -52,8 +50,8 @@ void _createNewSubContainer(tspContainer_t* container, tspContainerEntry_t* last
     _initSubContainer(subContainer);
     lastEntry->next = &subContainer->entries[0];
     subContainer->entries[0].prev = lastEntry;
-    container->lastSubContainer->next = subContainer;
-    container->lastSubContainer = subContainer;
+    subContainer->next = container->subContainers;
+    container->subContainers = subContainer;
     container->next = &subContainer->entries[0];
 }
 
@@ -67,14 +65,14 @@ tspContainerEntry_t* tspContainerGetEntry(tspContainer_t* container) {
 
 void tspContainerRemoveEntry(tspContainer_t* container, tspContainerEntry_t* entry) {
     tspContainerEntry_t* prev = entry->prev;
-    tspContainerEntry_t* next = entry->next;        
+    tspContainerEntry_t* next = entry->next;
     next->prev = prev;
     if (prev != NULL)
         prev->next = next;
-    if (container->next->next != NULL)
-        container->next->next->prev = entry;
     entry->prev = container->next;
     entry->next = container->next->next;
+    if (container->next->next != NULL)
+        container->next->next->prev = entry;
     container->next->next = entry;
 }
 
