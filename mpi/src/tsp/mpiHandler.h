@@ -3,28 +3,36 @@
 
 #include "tspSolver.h"
 #include "node.h"
+#include <mpi.h>
 
 #define NODE_TAG 100
 #define SOLUTION_TAG 101
 
-/* --------------------------------------------*
------------------Sync Mechanisms---------------*
+/*---------------------------------------------*
+---------------- Sync Mechanisms --------------*
 -----------------------------------------------*/
 void sendNode(Node_t* node, int to);
 void recvNode(Node_t* node, int from);
 
 
-/* --------------------------------------------*
-----------------Async Mechanisms---------------*
+/*---------------------------------------------*
+--------------- Async Mechanisms --------------*
 -----------------------------------------------*/
 void sendAsyncSolution(tspSolution_t* solution, int to);
-void recvAsyncSolution(tspSolution_t* solution, int to);
+void recvAsyncSolution(tspSolution_t* solution, int from);
 void sendAsyncNode(Node_t* node, int to);
 void recvAsyncNode(Node_t* node, int from);
 
-/* --------------------------------------------*
----------------Control Mechanisms--------------*
+/*---------------------------------------------*
+-------------- Control Mechanisms -------------*
 -----------------------------------------------*/
 bool hasMessageToReceive(int source, int tag);
+
+/*---------------------------------------------*
+----------------- MPI DataTypes ---------------*
+-----------------------------------------------*/
+
+MPI_Datatype mpiSolutionDataType();
+MPI_Datatype mpiNodeCreate(Node_t* node);
 
 #endif //__TSP_MPI_HANDLER__

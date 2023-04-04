@@ -53,6 +53,18 @@ static double _calculateLb(const tsp_t* tsp, const Node_t* node, int nextCity) {
     return node->lb + costFromTo - (costFrom + costTo) / 2;
 }
 
+static bool _isBetterSolution(tspSolution_t* oldSolution, tspSolution_t* newSolution) {
+    return !oldSolution->hasSolution || newSolution->cost < oldSolution->cost;
+    //BUG: How to include the indexes here?
+}
+
+static void _copySolution(tspSolution_t* oldSolution, tspSolution_t* newSolution) {
+    // Does not perform validation of oldSolution
+    newSolution->hasSolution = oldSolution->hasSolution;
+    newSolution->cost = oldSolution->cost;
+    strcpy(newSolution->tour, oldSolution->tour);
+}
+
 static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const Node_t* finalNode) {
     int currentCity = nodeCurrentCity(finalNode);
     double cost = finalNode->cost + tsp->roadCosts[currentCity][0];
@@ -111,6 +123,8 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     int next = (id + 1) % nprocs;
     int prev = (id - 1);
 
+    MPI_Datatype MPI_SOLUTION = mpiSolutionDataType();
+
     if (!id) {
         prev = nprocs - 1;
         ContainerEntry_t* startEntry = containerGetEntry(container);
@@ -132,21 +146,57 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     recvNode(node, prev); //put the node automatically in the container
     queuePush(&queue, entry);
 
-    while (true) {
-        entry = _getNextNode(&queue, solution->cost);
-        node = containerGetNode(entry);
-        
-        if (entry == NULL)
-            break;
+    if (!id) {
+        bool updatedSolution;
+        tspSolution_t newSolution;
+        bool terminated[nprocs];
+        memset(terminated, false, nprocs*sizeof(bool));
 
-        _processNode(tsp, container, &queue, solution, entry);
+        while (true) {
+            updatedSolution = false;
+            
+            // Fetch Processes' solutions
+            for (int i = 1; i < nprocs; i++) {
+                if (hasMessageToReceive(i, SOLUTION_TAG)) {
+                    //TODO: MPI_COUNT 
+                    recvAsyncSolution(&newSolution, i);
+                    if (_isBetterSolution(solution, &newSolution)) {
+                        _copySolution(solution, &newSolution);
+                        updatedSolution = true;
+                    }
+                }
+            }
+
+            //Broadcast the best solution
+            if (updatedSolution) {
+                MPI_Request request;
+                MPI_Ibcast(solution, 1, MPI_SOLUTION, 0, MPI_COMM_WORLD, &request);
+            }
+
+            // Fetch For Terminated Process
+            
+        }
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    else {
+        while (true) {
+            entry = _getNextNode(&queue, solution->cost);
+            node = containerGetNode(entry);
+            
+            if (entry == NULL)
+                break;
+
+            _processNode(tsp, container, &queue, solution, entry);
+        }
+    }
 
 
-    MPI_Finalize();
 
     queueDelete(&queue, NULL);
     containerDestroy(container);
+    if (id) tspSolutionDestroy(solution);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    
+    MPI_Finalize();
     return solution;
 }
