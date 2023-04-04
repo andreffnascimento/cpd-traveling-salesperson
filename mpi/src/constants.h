@@ -1,0 +1,12 @@
+#ifndef __CONSTANTS_H__
+#define __CONSTANTS_H__
+
+#define QUEUE_INITIAL_SIZE 1024
+#define QUEUE_SIZE_MULTIPLIER(SIZE) SIZE * 2
+
+#define MAX_CITIES 64
+#define NONEXISTENT_ROAD_VALUE -1
+
+#define CONTAINER_SUB_SIZE 1024
+
+#endif // __CONSTANTS_H__
