@@ -6,6 +6,9 @@
 #include "utils/queue.h"
 #include "mpiHandler.h"
 
+int id, nprocs;
+MPI_Datatype MPI_SOLUTION; 
+
 tspSolution_t* tspSolutionCreate(double maxTourCost) {
     tspSolution_t* solution = (tspSolution_t*)malloc(sizeof(tspSolution_t));
     solution->hasSolution = false;
@@ -58,11 +61,11 @@ static bool _isBetterSolution(tspSolution_t* oldSolution, tspSolution_t* newSolu
     //BUG: How to include the indexes here?
 }
 
-static void _copySolution(tspSolution_t* oldSolution, tspSolution_t* newSolution) {
+static void _copySolution(tspSolution_t* from, tspSolution_t* to) {
     // Does not perform validation of oldSolution
-    newSolution->hasSolution = oldSolution->hasSolution;
-    newSolution->cost = oldSolution->cost;
-    strcpy(newSolution->tour, oldSolution->tour);
+    to->hasSolution = from->hasSolution;
+    to->cost = from->cost;
+    strcpy(to->tour, from->tour);
 }
 
 static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const Node_t* finalNode) {
@@ -70,12 +73,13 @@ static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const Nod
     double cost = finalNode->cost + tsp->roadCosts[currentCity][0];
     bool isNewSolution = !solution->hasSolution || cost < solution->cost ||
                          (cost == solution->cost && currentCity < solution->tour[tsp->nCities - 1]);
+    
     if (isNewSolution) {
         DEBUG(nodePrint(finalNode));
         solution->hasSolution = true;
         solution->cost = cost;
         nodeCopyTour(finalNode, solution->tour);
-        sendAsyncSolution(solution, 0);
+        if (id) MPI_Send(solution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD);
     }
 }
 
@@ -106,8 +110,9 @@ static void _processNode(const tsp_t* tsp, Container_t* container, priorityQueue
     containerRemoveEntry(container, entry);
 }
 
+
+
 tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
-    int id, nprocs;
 
     MPI_Init(NULL, NULL);
 
@@ -120,13 +125,20 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
     ContainerEntry_t* entry;
     Node_t *node;
-    int next = (id + 1) % nprocs;
     int prev = (id - 1);
 
-    MPI_Datatype MPI_SOLUTION = mpiSolutionDataType();
+    MPI_SOLUTION = mpiSolutionDataType();
 
-    if (!id) {
-        prev = nprocs - 1;
+    if (nprocs == 1) {
+        //processStuff
+        fprintf(stderr, "Warning nprocs == 1\n");
+    }
+    else if (!id) {
+        // Initialization
+        int next = 1;
+        bool terminated[nprocs];
+        memset(terminated, false, nprocs*sizeof(bool));
+
         ContainerEntry_t* startEntry = containerGetEntry(container);
         nodeInit(containerGetNode(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
         _processNode(tsp, container, &queue, solution, startEntry);
@@ -134,54 +146,63 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         while(true) {
             //Distribute nodes across diff processes
             entry = _getNextNode(&queue, solution->cost);
+            if (!entry) break;
             node = containerGetNode(entry);
-            sendAsyncNode(node, next);
-            next = (next + 1) % nprocs;
+            sendNode(node, next);
+            next = (id + 1) % nprocs;
+            if ((next + 1) == 0) next = (id + 1) % nprocs;
             containerRemoveEntry(container, entry);
         }
 
-    }
-    entry = containerGetEntry(container);
-    node = containerGetNode(entry);
-    recvNode(node, prev); //put the node automatically in the container
-    queuePush(&queue, entry);
-
-    if (!id) {
-        bool updatedSolution;
-        tspSolution_t newSolution;
-        bool terminated[nprocs];
-        memset(terminated, false, nprocs*sizeof(bool));
 
         while (true) {
-            updatedSolution = false;
-            
-            // Fetch Processes' solutions
-            for (int i = 1; i < nprocs; i++) {
-                if (hasMessageToReceive(i, SOLUTION_TAG)) {
-                    //TODO: MPI_COUNT 
-                    recvAsyncSolution(&newSolution, i);
+            //Message Exchanger
+            int flag = false;
+            MPI_Status status;
+            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+
+            if (flag) {
+                if (status.MPI_TAG == SOLUTION_TAG) {
+                    tspSolution_t newSolution;
+                    MPI_Status newStatus;
+                    MPI_Request request;
+                    MPI_Recv(&newSolution, 1, MPI_SOLUTION, status.MPI_SOURCE, SOLUTION_TAG, MPI_COMM_WORLD, &newStatus);
                     if (_isBetterSolution(solution, &newSolution)) {
-                        _copySolution(solution, &newSolution);
-                        updatedSolution = true;
+                        _copySolution(&newSolution, solution);
+                        MPI_Ibcast(solution, 1, MPI_SOLUTION, 0, MPI_COMM_WORLD, &request);
+                        //broadcast
                     }
                 }
+                else if (status.MPI_TAG == TERMINATED_TAG) {
+                    terminated[status.MPI_SOURCE - 1] = true;
+                    bool finished = true;
+                    for (int i = 1; i < nprocs; i++) {
+                        if (!terminated[i]) {
+                            finished = false;
+                            break;
+                        }
+                    }
+                    if (finished) break;
+                }
             }
-
-            //Broadcast the best solution
-            if (updatedSolution) {
-                MPI_Request request;
-                MPI_Ibcast(solution, 1, MPI_SOLUTION, 0, MPI_COMM_WORLD, &request);
-            }
-
-            // Fetch For Terminated Process
-            
         }
     }
     else {
+        // All Others
+        entry = containerGetEntry(container);
+        node = containerGetNode(entry);
+        recvNode(node, prev); //put the node automatically in the container
+        queuePush(&queue, entry);
+
+        tspSolution_t recvSolution;
         while (true) {
+            recvSolution.hasSolution = false;
+            recvAsyncSolution(&recvSolution, 0);
+            if (recvSolution.hasSolution && _isBetterSolution(solution, &recvSolution)) _copySolution(&recvSolution, solution);
+
             entry = _getNextNode(&queue, solution->cost);
             node = containerGetNode(entry);
-            
+
             if (entry == NULL)
                 break;
 
@@ -189,14 +210,12 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         }
     }
 
-
-
     queueDelete(&queue, NULL);
     containerDestroy(container);
     if (id) tspSolutionDestroy(solution);
 
     MPI_Barrier(MPI_COMM_WORLD);
-    
+
     MPI_Finalize();
     return solution;
 }

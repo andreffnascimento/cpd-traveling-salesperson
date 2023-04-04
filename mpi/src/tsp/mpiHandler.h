@@ -7,6 +7,7 @@
 
 #define NODE_TAG 100
 #define SOLUTION_TAG 101
+#define TERMINATED_TAG 102
 
 /*---------------------------------------------*
 ---------------- Sync Mechanisms --------------*
