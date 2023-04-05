@@ -9,17 +9,14 @@ typedef struct tspNode {
     double priority;
     int length;
     char tour[MAX_CITIES];
-    unsigned long visited;
+    size_t visited;
 } tspNode_t;
-
-tspNode_t* tspNodeInit(tspNode_t* node, double cost, double lb, int length, int currentCity);
-tspNode_t* tspNodeInitExt(tspNode_t* node, const tspNode_t* parent, double cost, double lb, int currentCity);
 
 tspNode_t* tspNodeCreate(double cost, double lb, int length, int currentCity);
 tspNode_t* tspNodeExtend(const tspNode_t* parent, double cost, double lb, int currentCity);
-
-void tspNodeCopyTour(const tspNode_t* parent, char* tour);
 void tspNodeDestroy(tspNode_t* node);
+
+void tspNodeCopyTour(const tspNode_t* tspNode, char* container);
 void tspNodePrint(const tspNode_t* node);
 
 inline int tspNodeCurrentCity(const tspNode_t* node) { return node->tour[node->length - 1]; }

@@ -1,22 +1,5 @@
 #include "tspNode.h"
 
-tspNode_t* tspNodeInit(tspNode_t* node, double cost, double lb, int length, int currentCity) {
-    node->cost = cost;
-    node->lb = lb;
-    node->priority = lb * MAX_CITIES + currentCity;
-    node->length = length;
-    node->tour[node->length - 1] = currentCity;
-    node->visited = 0x00000001 << currentCity;
-    return node;
-}
-
-tspNode_t* tspNodeExtInit(tspNode_t* node, const tspNode_t* parent, double cost, double lb, int currentCity) {
-    tspNodeInit(node, cost, lb, parent->length + 1, currentCity);
-    node->visited |= parent->visited;
-    tspNodeCopyTour(parent, node->tour);
-    return node;
-}
-
 tspNode_t* tspNodeCreate(double cost, double lb, int length, int currentCity) {
     tspNode_t* node = (tspNode_t*)malloc(sizeof(tspNode_t));
     node->cost = cost;
@@ -35,14 +18,14 @@ tspNode_t* tspNodeExtend(const tspNode_t* parent, double cost, double lb, int cu
     return node;
 }
 
-void tspNodeCopyTour(const tspNode_t* tspNode, char* container) {
-    for (int i = 0; i < tspNode->length; i++)
-        container[i] = tspNode->tour[i];
-}
-
 void tspNodeDestroy(tspNode_t* node) {
     free(node);
     node = NULL;
+}
+
+void tspNodeCopyTour(const tspNode_t* tspNode, char* container) {
+    for (int i = 0; i < tspNode->length; i++)
+        container[i] = tspNode->tour[i];
 }
 
 void tspNodePrint(const tspNode_t* node) {
