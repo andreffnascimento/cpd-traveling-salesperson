@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [ $# -lt 1 ] ; then
-	echo "Usage: ${0} <test_name>"
+if [ $# -lt 2 ] ; then
+	echo "Usage: ${0} <test_name> <num processes>"
 	exit 1
 fi
 
@@ -17,10 +17,10 @@ IN=${1}
 OUT_1=${PATH_OUT_1}/$(basename ${IN} .in).out
 OUT_2=${PATH_OUT_2}/$(basename ${IN} .in).out
 TEST=$(basename $IN)
-RUN=${PATH_DIR}/tsp
+RUN=${PATH_DIR}/tsp-mpi
 MAX_VALUE=$(echo ${TEST} | sed -n "s/^.*-\([0-9]*\).*$/\1/p")
 
-${RUN} ${IN} ${MAX_VALUE} 1> ${PATH_RES} 2> ${PATH_TIME}
+mpirun -np ${2} ${RUN} ${IN} ${MAX_VALUE} 1> ${PATH_RES} 2> ${PATH_TIME}
 diff ${PATH_RES} ${OUT_1} >/dev/null
 if [ $? -eq 0 ]; then
     printf "\e[32m[Succ] \e[0m%s \e[33m(%s)\e[0m\n" ${TEST} $(cat ${PATH_TIME})

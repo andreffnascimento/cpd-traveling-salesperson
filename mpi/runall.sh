@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [ $# != 0 ] ; then
-	echo "Usage: sh ${0}"
+if [ $# -lt 1 ] ; then
+	echo "Usage: sh ${0} <num processes>"
 	exit 1
 fi
 
@@ -16,5 +16,5 @@ printf "\t\e[33mRunning the test suit..\n\e[0m"
 for test in ${PATH_IN}/*.in
 do
 	file=$(realpath $test)
-	${PATH_RUN} ${file}
+	${PATH_RUN} ${file} $1
 done

@@ -147,6 +147,19 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     if (nprocs == 1) {
         //processStuff
         fprintf(stderr, "Warning nprocs == 1\n");
+
+        ContainerEntry_t* startEntry = containerGetEntry(container);
+        nodeInit(containerGetNode(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
+        _processNode(tsp, container, &queue, solution, startEntry);
+
+        while (true)
+        {
+            entry = _getNextNode(&queue, solution->cost);
+            if (!entry) break;
+            _processNode(tsp, container, &queue, solution, entry);
+        }
+        
+        
     }
     else if (!id) {
         // Initialization
@@ -250,7 +263,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     else {
         //All other processes
         int flag;
-        bool isProcessing = false;
+        bool isProcessing = true;
         bool isInit = false;
         while (true) {
             flag = false;
@@ -291,6 +304,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                 }
                 else if (status.MPI_TAG == INIT_TAG) {
                     MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, INIT_TAG, MPI_COMM_WORLD, NULL);
+                    // if (isInit) printf("[Process %d] initalized\n", id);
                 }
             }
             //process nodes if we have nodes to process
@@ -304,6 +318,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
                 //if (isProcessing && !haveMoreMsgs) {
                 if (isProcessing && isInit) {
+                    // printf("[Process %d] is sending Finito\n", id);
                     MPI_Request request;
                     isProcessing = false;
                     MPI_Isend(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &request);
