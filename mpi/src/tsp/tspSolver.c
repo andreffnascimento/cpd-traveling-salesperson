@@ -153,6 +153,8 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         int next = 1;
         bool isProcessing[nprocs];
         memset(isProcessing, true, nprocs*sizeof(bool));
+        bool isInit = true;
+
 
         ContainerEntry_t* startEntry = containerGetEntry(container);
         nodeInit(containerGetNode(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
@@ -176,6 +178,9 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             
             containerRemoveEntry(container, entry);
         }
+        for (int i = 1; i < nprocs; i++)
+            MPI_Isend(&isInit, 1, MPI_C_BOOL, i, INIT_TAG, MPI_COMM_WORLD, &request); //Question: does it saves on the buffer?
+
 
         int flag;
         while (true) {
@@ -231,7 +236,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                         }
                         if (finished) {
                             MPI_Request request;
-                            fprintf(stderr, "P: 0 is sending a Finish\n");
+                            // fprintf(stderr, "P: 0 is sending a Finish\n");
                             // MPI_Ibcast(&finished, 1, MPI_C_BOOL, 0, MPI_COMM_WORLD, &request);
                             for (int i = 1; i < nprocs; i++)
                                 MPI_Isend(&finished, 1, MPI_C_BOOL, i, TERMINATED_TAG, MPI_COMM_WORLD, &request);
@@ -246,6 +251,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         //All other processes
         int flag;
         bool isProcessing = false;
+        bool isInit = false;
         while (true) {
             flag = false;
             MPI_Status status;
@@ -283,6 +289,9 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     if (isProcessing) fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
                     break;
                 }
+                else if (status.MPI_TAG == INIT_TAG) {
+                    MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, INIT_TAG, MPI_COMM_WORLD, NULL);
+                }
             }
             //process nodes if we have nodes to process
             //otherwise send message that we don't have more nodes to process
@@ -294,7 +303,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                 // MPI_Iprobe(MPI_ANY_SOURCE, NODE_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
 
                 //if (isProcessing && !haveMoreMsgs) {
-                if (isProcessing) {
+                if (isProcessing && isInit) {
                     MPI_Request request;
                     isProcessing = false;
                     MPI_Isend(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &request);
@@ -303,7 +312,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             }
             else {
                 // means it's processing
-                if (!isProcessing) {
+                if (!isProcessing && isInit) {
                     MPI_Request request;
                     isProcessing = true;
                     MPI_Isend(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &request);

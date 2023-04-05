@@ -9,6 +9,7 @@
 #define SOLUTION_TAG 101
 #define PROCESSING_STATUS_TAG 102
 #define TERMINATED_TAG 103
+#define INIT_TAG 104
 
 /*---------------------------------------------*
 ---------------- Sync Mechanisms --------------*
