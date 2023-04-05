@@ -212,8 +212,14 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                 }
                 else if (status.MPI_TAG == PROCESSING_STATUS_TAG) {
                     bool isProcProcessing;
-                    MPI_Recv(&isProcProcessing, 1, MPI_C_BOOL, status.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, NULL);
+                    MPI_Status processingStatus;
+                    MPI_Recv(&isProcProcessing, 1, MPI_C_BOOL, status.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &processingStatus);
                     isProcessing[status.MPI_SOURCE] = isProcProcessing;
+
+                    //Do we have more than one message in the buffer; we only want the last one
+                    // int haveMoreMsgs = false;
+                    // MPI_Iprobe(processingStatus.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
+
                     if (!isProcProcessing) {
                         //we will only check if the process has terminated
                         bool finished = true;
@@ -246,14 +252,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
             if (flag) {
-                if (status.MPI_TAG == NODE_TAG) {
-                    isProcessing = true;
-                    entry = containerGetEntry(container);
-                    node = containerGetNode(entry);
-                    MPI_Recv(node, 1, MPI_NODE, 0, NODE_TAG, MPI_COMM_WORLD, NULL);
-                    queuePush(&queue, entry);
-                }
-                else if (status.MPI_TAG == SOLUTION_TAG) {
+                if (status.MPI_TAG == SOLUTION_TAG) {
                     tspSolution_t recvSolution;
                     MPI_Status statusSolution;
                     MPI_Recv(&recvSolution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD, &statusSolution);
@@ -272,7 +271,13 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     // printSolution2(tsp, solution);
                     // printf("--------------------------\n");
                     
-
+                }
+                else if (status.MPI_TAG == NODE_TAG) {
+                    isProcessing = true;
+                    entry = containerGetEntry(container);
+                    node = containerGetNode(entry);
+                    MPI_Recv(node, 1, MPI_NODE, 0, NODE_TAG, MPI_COMM_WORLD, NULL);
+                    queuePush(&queue, entry);
                 }
                 else if (status.MPI_TAG == TERMINATED_TAG) {
                     if (isProcessing) fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
@@ -285,6 +290,10 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             entry = _getNextNode(&queue, solution->cost);
 
             if (entry == NULL) {
+                // int haveMoreMsgs = false;
+                // MPI_Iprobe(MPI_ANY_SOURCE, NODE_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
+
+                //if (isProcessing && !haveMoreMsgs) {
                 if (isProcessing) {
                     MPI_Request request;
                     isProcessing = false;
