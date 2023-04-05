@@ -8,6 +8,7 @@
 
 int id, nprocs;
 MPI_Datatype MPI_SOLUTION; 
+MPI_Datatype MPI_NODE; 
 
 tspSolution_t* tspSolutionCreate(double maxTourCost) {
     tspSolution_t* solution = (tspSolution_t*)malloc(sizeof(tspSolution_t));
@@ -61,11 +62,13 @@ static bool _isBetterSolution(tspSolution_t* oldSolution, tspSolution_t* newSolu
     //BUG: How to include the indexes here?
 }
 
-static void _copySolution(tspSolution_t* from, tspSolution_t* to) {
+static void _copySolution(const tsp_t* tsp, tspSolution_t* from, tspSolution_t* to) {
     // Does not perform validation of oldSolution
     to->hasSolution = from->hasSolution;
     to->cost = from->cost;
-    strcpy(to->tour, from->tour);
+
+    for (int i = 0; i < tsp->nCities; i++)
+        to->tour[i] = from->tour[i];
 }
 
 static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const Node_t* finalNode) {
@@ -79,7 +82,10 @@ static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const Nod
         solution->hasSolution = true;
         solution->cost = cost;
         nodeCopyTour(finalNode, solution->tour);
-        if (id) MPI_Send(solution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD);
+        if (id) {
+            MPI_Request request;
+            MPI_Isend(solution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD, &request);
+        }
     }
 }
 
@@ -110,7 +116,16 @@ static void _processNode(const tsp_t* tsp, Container_t* container, priorityQueue
     containerRemoveEntry(container, entry);
 }
 
-
+void printSolution2(const tsp_t* tsp, const tspSolution_t* solution) {
+    if (solution->hasSolution) {
+        printf("%.1f\n", solution->cost);
+        for (int i = 0; i < tsp->nCities; i++)
+            printf("%d ", solution->tour[i]);
+        printf("0\n");
+    } else {
+        printf("NO SOLUTION\n");
+    }
+}
 
 tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
@@ -125,9 +140,9 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
     ContainerEntry_t* entry;
     Node_t *node;
-    int prev = (id - 1);
 
     MPI_SOLUTION = mpiSolutionDataType();
+    MPI_NODE = mpiNodeDataType();
 
     if (nprocs == 1) {
         //processStuff
@@ -136,28 +151,36 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     else if (!id) {
         // Initialization
         int next = 1;
-        bool terminated[nprocs];
-        memset(terminated, false, nprocs*sizeof(bool));
+        bool isProcessing[nprocs];
+        memset(isProcessing, true, nprocs*sizeof(bool));
 
         ContainerEntry_t* startEntry = containerGetEntry(container);
         nodeInit(containerGetNode(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
         _processNode(tsp, container, &queue, solution, startEntry);
 
+        // printf("Nprocs %d\n", nprocs);
+        MPI_Request request;
         while(true) {
             //Distribute nodes across diff processes
             entry = _getNextNode(&queue, solution->cost);
             if (!entry) break;
+            
             node = containerGetNode(entry);
-            sendNode(node, next);
-            next = (id + 1) % nprocs;
-            if ((next + 1) == 0) next = (id + 1) % nprocs;
+
+            MPI_Isend(node, 1, MPI_NODE, next, NODE_TAG, MPI_COMM_WORLD, &request); //Question: does it saves on the buffer?
+
+            // printf("Node Sent to Process %d\n", next);
+            
+            next = (next + 1) % nprocs;
+            if (next == 0) next = 1; //(id + 1) % nprocs;
+            
             containerRemoveEntry(container, entry);
         }
 
-
+        int flag;
         while (true) {
             //Message Exchanger
-            int flag = false;
+            flag = false;
             MPI_Status status;
             MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
@@ -165,48 +188,120 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                 if (status.MPI_TAG == SOLUTION_TAG) {
                     tspSolution_t newSolution;
                     MPI_Status newStatus;
-                    MPI_Request request;
+                    MPI_Request request[nprocs];
                     MPI_Recv(&newSolution, 1, MPI_SOLUTION, status.MPI_SOURCE, SOLUTION_TAG, MPI_COMM_WORLD, &newStatus);
                     if (_isBetterSolution(solution, &newSolution)) {
-                        _copySolution(&newSolution, solution);
-                        MPI_Ibcast(solution, 1, MPI_SOLUTION, 0, MPI_COMM_WORLD, &request);
-                        //broadcast
+
+                        // printf("[Process %d]\n", id);
+                        // printf("--> Old Solution\n");
+                        // printSolution2(tsp, solution);
+                        // printf("--> Received Solution\n");
+                        // printSolution2(tsp, &newSolution);
+
+                        _copySolution(tsp, &newSolution, solution);
+
+                        // printf("--> Updated Solution\n");
+                        // printSolution2(tsp, solution);
+
+                        // printf("---------------------------------\n");
+                        for (int i = 1; i < nprocs; i++)
+                            MPI_Isend(solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD, &request[i]);
+                            //MPI_Send(&solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
+
                     }
                 }
-                else if (status.MPI_TAG == TERMINATED_TAG) {
-                    terminated[status.MPI_SOURCE - 1] = true;
-                    bool finished = true;
-                    for (int i = 1; i < nprocs; i++) {
-                        if (!terminated[i]) {
-                            finished = false;
-                            break;
+                else if (status.MPI_TAG == PROCESSING_STATUS_TAG) {
+                    bool isProcProcessing;
+                    MPI_Recv(&isProcProcessing, 1, MPI_C_BOOL, status.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, NULL);
+                    isProcessing[status.MPI_SOURCE] = isProcProcessing;
+                    if (!isProcProcessing) {
+                        //we will only check if the process has terminated
+                        bool finished = true;
+                        for (int i = 1; i < nprocs; i++) {
+                            if (isProcessing[i]) {
+                                finished = false;
+                                break;
+                            }
                         }
+                        if (finished) {
+                            MPI_Request request;
+                            fprintf(stderr, "P: 0 is sending a Finish\n");
+                            // MPI_Ibcast(&finished, 1, MPI_C_BOOL, 0, MPI_COMM_WORLD, &request);
+                            for (int i = 1; i < nprocs; i++)
+                                MPI_Isend(&finished, 1, MPI_C_BOOL, i, TERMINATED_TAG, MPI_COMM_WORLD, &request);
+                            break;  
+                        } 
                     }
-                    if (finished) break;
                 }
             }
         }
     }
     else {
-        // All Others
-        entry = containerGetEntry(container);
-        node = containerGetNode(entry);
-        recvNode(node, prev); //put the node automatically in the container
-        queuePush(&queue, entry);
-
-        tspSolution_t recvSolution;
+        //All other processes
+        int flag;
+        bool isProcessing = false;
         while (true) {
-            recvSolution.hasSolution = false;
-            recvAsyncSolution(&recvSolution, 0);
-            if (recvSolution.hasSolution && _isBetterSolution(solution, &recvSolution)) _copySolution(&recvSolution, solution);
+            flag = false;
+            MPI_Status status;
+            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+
+            if (flag) {
+                if (status.MPI_TAG == NODE_TAG) {
+                    isProcessing = true;
+                    entry = containerGetEntry(container);
+                    node = containerGetNode(entry);
+                    MPI_Recv(node, 1, MPI_NODE, 0, NODE_TAG, MPI_COMM_WORLD, NULL);
+                    queuePush(&queue, entry);
+                }
+                else if (status.MPI_TAG == SOLUTION_TAG) {
+                    tspSolution_t recvSolution;
+                    MPI_Status statusSolution;
+                    MPI_Recv(&recvSolution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD, &statusSolution);
+
+                    // printf("[Process %d]\n", id);
+                    // printf("--> Old Solution\n");
+                    // printSolution2(tsp, solution);
+                    
+                    // printf("--> received Solution\n");
+                    // printSolution2(tsp, &recvSolution);
+
+
+                    if (_isBetterSolution(solution, &recvSolution)) _copySolution(tsp, &recvSolution, solution);
+                    
+                    // printf("--> Updated Solution\n");
+                    // printSolution2(tsp, solution);
+                    // printf("--------------------------\n");
+                    
+
+                }
+                else if (status.MPI_TAG == TERMINATED_TAG) {
+                    if (isProcessing) fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
+                    break;
+                }
+            }
+            //process nodes if we have nodes to process
+            //otherwise send message that we don't have more nodes to process
 
             entry = _getNextNode(&queue, solution->cost);
-            node = containerGetNode(entry);
 
-            if (entry == NULL)
-                break;
-
-            _processNode(tsp, container, &queue, solution, entry);
+            if (entry == NULL) {
+                if (isProcessing) {
+                    MPI_Request request;
+                    isProcessing = false;
+                    MPI_Isend(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &request);
+                    // printf("[P: %d] End Processing\n", id);
+                } 
+            }
+            else {
+                // means it's processing
+                if (!isProcessing) {
+                    MPI_Request request;
+                    isProcessing = true;
+                    MPI_Isend(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &request);
+                }
+                node = containerGetNode(entry);
+                _processNode(tsp, container, &queue, solution, entry);
+            }
         }
     }
 
@@ -217,5 +312,6 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     MPI_Finalize();
+    if (id) exit(0);
     return solution;
 }

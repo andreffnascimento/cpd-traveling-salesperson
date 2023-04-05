@@ -7,7 +7,8 @@
 
 #define NODE_TAG 100
 #define SOLUTION_TAG 101
-#define TERMINATED_TAG 102
+#define PROCESSING_STATUS_TAG 102
+#define TERMINATED_TAG 103
 
 /*---------------------------------------------*
 ---------------- Sync Mechanisms --------------*
@@ -34,6 +35,7 @@ bool hasMessageToReceive(int source, int tag);
 -----------------------------------------------*/
 
 MPI_Datatype mpiSolutionDataType();
-MPI_Datatype mpiNodeCreate(Node_t* node);
+MPI_Datatype mpiNodeDataType();
+
 
 #endif //__TSP_MPI_HANDLER__

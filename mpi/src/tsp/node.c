@@ -37,9 +37,9 @@ Node_t* nodeExtend(const Node_t* parent, double cost, double lb, int currentCity
     return node;
 }
 
-void nodeCopyTour(const Node_t* node, char* container) {
+void nodeCopyTour(const Node_t* node, char* tour) {
     for (int i = 0; i < node->length; i++)
-        container[i] = node->tour[i];
+        tour[i] = node->tour[i];
 }
 
 void nodeDestroy(Node_t* node) {
