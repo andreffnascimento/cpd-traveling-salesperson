@@ -1,41 +1,46 @@
 #include "tspSolver.h"
-#include "tspContainer.h"
 #include "tspNode.h"
 #include "utils/queue.h"
 #include <math.h>
 
 typedef struct {
     const tsp_t* tsp;
-    tspContainer_t* container;
     tspSolution_t* solution;
-    priorityQueue_t queue;
+    priorityQueue_t* queue;
 } tspSolverData_t;
 
 tspSolution_t* tspSolutionCreate(double maxTourCost) {
     tspSolution_t* solution = (tspSolution_t*)malloc(sizeof(tspSolution_t));
     solution->hasSolution = false;
     solution->cost = maxTourCost;
+    solution->priority = maxTourCost * MAX_CITIES + MAX_CITIES - 1;
     return solution;
 }
 
 void tspSolutionDestroy(tspSolution_t* solution) { free(solution); }
 
-static int __tspNodeCompFun(void* el1, void* el2) {
-    tspNode_t* tspNode1 = tspContainerEntryVal((tspContainerEntry_t*)el1);
-    tspNode_t* tspNode2 = tspContainerEntryVal((tspContainerEntry_t*)el2);
+static int __tspNodeCmpFun(void* el1, void* el2) {
+    tspNode_t* tspNode1 = (tspNode_t*)el1;
+    tspNode_t* tspNode2 = (tspNode_t*)el2;
     return (tspNode2->priority < tspNode1->priority ? 1 : 0);
+}
+
+static void __tspNodeDestroyFun(void* el) {
+    tspNode_t* node = (tspNode_t*)el;
+    tspNodeDestroy(node);
+}
+
+static tspNode_t* _getNextNode(priorityQueue_t* queue, double solutionPriority) {
+    tspNode_t* node = queuePop(queue);
+    if (node != NULL && node->priority > solutionPriority) {
+        tspNodeDestroy(node);
+        return NULL;
+    }
+    return node;
 }
 
 static inline bool _isCityInTour(const tspNode_t* node, int cityNumber) {
     return node->visited & (0x00000001 << cityNumber);
-}
-
-static tspContainerEntry_t* _getNextNode(tspSolverData_t* tspSolverData) {
-    tspContainerEntry_t* entry = queuePop(&tspSolverData->queue);
-    const tspNode_t* node = tspContainerEntryVal(entry);
-    if (node != NULL && node->lb >= tspSolverData->solution->cost)
-        return NULL;
-    return entry;
 }
 
 static double _calculateInitialLb(const tsp_t* tsp) {
@@ -62,13 +67,12 @@ static void _updateBestTour(tspSolverData_t* tspSolverData, const tspNode_t* fin
     tspSolution_t* solution = tspSolverData->solution;
     int nodeCurrentCity = tspNodeCurrentCity(finalNode);
     double cost = finalNode->cost + tsp->roadCosts[nodeCurrentCity][0];
-    bool isNewSolution = !solution->hasSolution || cost < solution->cost ||
-                         (cost == solution->cost && nodeCurrentCity < solution->tour[tsp->nCities - 1]);
-    if (isNewSolution) {
-        DEBUG(tspNodePrint(finalNode));
+    double priority = cost * MAX_CITIES + nodeCurrentCity;
+    if (priority < solution->priority) {
+        tspNodeCopyTour(finalNode, solution->tour);
         solution->hasSolution = true;
         solution->cost = cost;
-        tspNodeCopyTour(finalNode, solution->tour);
+        solution->priority = cost * MAX_CITIES + solution->tour[tsp->nCities - 1];
     }
 }
 
@@ -81,43 +85,38 @@ static void _visitNeighbors(tspSolverData_t* tspSolverData, const tspNode_t* par
             if (lb > tspSolverData->solution->cost)
                 continue;
             double cost = parent->cost + tsp->roadCosts[parentCurrentCity][cityNumber];
-            tspContainerEntry_t* nextEntry = tspContainerGetEntry(tspSolverData->container);
-            tspNodeExtInit(tspContainerEntryVal(nextEntry), parent, cost, lb, cityNumber);
-            queuePush(&tspSolverData->queue, nextEntry);
+            tspNode_t* nextNode = tspNodeExtend(parent, cost, lb, cityNumber);
+            queuePush(tspSolverData->queue, nextNode);
         }
     }
 }
 
-static void _processNode(tspSolverData_t* tspSolverData, tspContainerEntry_t* entry) {
+static void _processNode(tspSolverData_t* tspSolverData, tspNode_t* node) {
     const tsp_t* tsp = tspSolverData->tsp;
-    tspNode_t* node = tspContainerEntryVal(entry);
-    DEBUG(tspNodePrint(node));
     if ((node->length == tsp->nCities) && tspIsNeighbour(tsp, tspNodeCurrentCity(node), 0))
         _updateBestTour(tspSolverData, node);
     else
         _visitNeighbors(tspSolverData, node);
-    tspContainerRemoveEntry(tspSolverData->container, entry);
 }
 
 tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     tspSolverData_t tspSolverData;
     tspSolverData.tsp = tsp;
-    tspSolverData.container = tspContainerCreate();
     tspSolverData.solution = tspSolutionCreate(maxTourCost);
-    tspSolverData.queue = queueCreate(__tspNodeCompFun);
+    tspSolverData.queue = queueCreate(__tspNodeCmpFun);
 
-    tspContainerEntry_t* startEntry = tspContainerGetEntry(tspSolverData.container);
-    tspNodeInit(tspContainerEntryVal(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
-    _processNode(&tspSolverData, startEntry);
+    tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
+    _processNode(&tspSolverData, startNode);
+    tspNodeDestroy(startNode);
 
     while (true) {
-        tspContainerEntry_t* entry = _getNextNode(&tspSolverData);
-        if (entry == NULL)
+        tspNode_t* node = _getNextNode(tspSolverData.queue, tspSolverData.solution->priority);
+        if (node == NULL)
             break;
-        _processNode(&tspSolverData, entry);
+        _processNode(&tspSolverData, node);
+        tspNodeDestroy(node);
     }
 
-    queueDelete(&tspSolverData.queue, NULL);
-    tspContainerDestroy(tspSolverData.container);
+    queueDestroy(tspSolverData.queue, __tspNodeDestroyFun);
     return tspSolverData.solution;
 }
