@@ -13,7 +13,6 @@ typedef struct {
 
 tspSolution_t* tspSolutionCreate(double maxTourCost);
 void tspSolutionDestroy(tspSolution_t* tspSolution);
-
 tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost);
 
 #endif // __TSP__TSP_SOLVER_H__
