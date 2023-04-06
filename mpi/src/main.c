@@ -1,7 +1,6 @@
 #include "include.h"
 #include "tsp/tspSolver.h"
 #include <omp.h>
-#include <mpi.h>
 
 FILE* openFile(const char* path, const char* mode) {
     FILE* file = fopen(path, mode);

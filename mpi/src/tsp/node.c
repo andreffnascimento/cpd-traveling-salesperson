@@ -12,7 +12,6 @@ Node_t* nodeInit(Node_t* node, double cost, double lb, int length, int currentCi
 }
 
 Node_t* nodeExtInit(Node_t* node, const Node_t* parent, double cost, double lb, int currentCity) {
-    //
     nodeInit(node, cost, lb, parent->length + 1, currentCity);
     node->visited |= parent->visited; //or operator
     nodeCopyTour(parent, node->tour);

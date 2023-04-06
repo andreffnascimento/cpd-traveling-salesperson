@@ -78,7 +78,6 @@ static void _updateBestTour(const tsp_t* tsp, tspSolution_t* solution, const Nod
                          (cost == solution->cost && currentCity < solution->tour[tsp->nCities - 1]);
     
     if (isNewSolution) {
-        DEBUG(nodePrint(finalNode));
         solution->hasSolution = true;
         solution->cost = cost;
         nodeCopyTour(finalNode, solution->tour);
@@ -127,6 +126,34 @@ void printSolution2(const tsp_t* tsp, const tspSolution_t* solution) {
     }
 }
 
+
+tspSolution_t* tspSolve2(const tsp_t* tsp, double maxTourCost) {
+
+    Container_t* container = containerCreate();
+    tspSolution_t* solution = tspSolutionCreate(maxTourCost);
+    priorityQueue_t queue = queueCreate(__tspNodeCompFun);
+
+    ContainerEntry_t* entry;
+    Node_t *node;
+
+
+    ContainerEntry_t* startEntry = containerGetEntry(container);
+    nodeInit(containerGetNode(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
+    _processNode(tsp, container, &queue, solution, startEntry);
+
+    while (true) {
+        entry = _getNextNode(&queue, solution->cost);
+        if (entry == NULL) break;
+        _processNode(tsp, container, &queue, solution, entry);
+    }
+
+    queueDelete(&queue, NULL);
+    containerDestroy(container);
+
+    return solution;
+
+}
+
 tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
     MPI_Init(NULL, NULL);
@@ -152,13 +179,18 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         nodeInit(containerGetNode(startEntry), 0, _calculateInitialLb(tsp), 1, 0);
         _processNode(tsp, container, &queue, solution, startEntry);
 
-        while (true)
-        {
+        while (true) {
             entry = _getNextNode(&queue, solution->cost);
-            if (!entry) break;
+            if (entry == NULL) break;
             _processNode(tsp, container, &queue, solution, entry);
         }
-        
+
+
+        queueDelete(&queue, NULL);
+        containerDestroy(container);
+        // MPI_Finalize();
+
+        return solution;
         
     }
     else if (!id) {
@@ -299,7 +331,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     queuePush(&queue, entry);
                 }
                 else if (status.MPI_TAG == TERMINATED_TAG) {
-                    if (isProcessing) fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
+                    // if (isProcessing) fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
                     break;
                 }
                 else if (status.MPI_TAG == INIT_TAG) {
