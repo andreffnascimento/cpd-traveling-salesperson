@@ -10,26 +10,28 @@
 #define PROCESSING_STATUS_TAG 102
 #define TERMINATED_TAG 103
 #define INIT_TAG 104
+#define ASK_NODE_TAG 105
+#define NO_NODE_TAG 106
 
 /*---------------------------------------------*
 ---------------- Sync Mechanisms --------------*
 -----------------------------------------------*/
-void sendNode(Node_t* node, int to);
-void recvNode(Node_t* node, int from);
+// void sendNode(Node_t* node, int to);
+// void recvNode(Node_t* node, int from);
 
 
 /*---------------------------------------------*
 --------------- Async Mechanisms --------------*
 -----------------------------------------------*/
-void sendAsyncSolution(tspSolution_t* solution, int to);
-void recvAsyncSolution(tspSolution_t* solution, int from);
-void sendAsyncNode(Node_t* node, int to);
-void recvAsyncNode(Node_t* node, int from);
+// void sendAsyncSolution(tspSolution_t* solution, int to);
+// void recvAsyncSolution(tspSolution_t* solution, int from);
+// void sendAsyncNode(Node_t* node, int to);
+// void recvAsyncNode(Node_t* node, int from);
 
 /*---------------------------------------------*
 -------------- Control Mechanisms -------------*
 -----------------------------------------------*/
-bool hasMessageToReceive(int source, int tag);
+// bool hasMessageToReceive(int source, int tag);
 
 /*---------------------------------------------*
 ----------------- MPI DataTypes ---------------*
