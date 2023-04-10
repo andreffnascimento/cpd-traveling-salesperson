@@ -13,3 +13,7 @@ serial/tsp
 # Omp Binaries
 omp/bin/
 omp/tsp-omp
+
+# MPI Binaries
+mpi/bin/
+mpi/tsp-mpi
