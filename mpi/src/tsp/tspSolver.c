@@ -122,16 +122,6 @@ static void _processNode(tspSolverData_t* tspSolverData, Node_t* node) {
         _visitNeighbors(tspSolverData, node);
 }
 
-void printSolution2(const tsp_t* tsp, const tspSolution_t* solution) {
-    if (solution->hasSolution) {
-        printf("%.1f\n", solution->cost);
-        for (int i = 0; i < tsp->nCities; i++)
-            printf("%d ", solution->tour[i]);
-        printf("0\n");
-    } else {
-        printf("NO SOLUTION\n");
-    }
-}
 
 tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
@@ -185,9 +175,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             node = _getNextNode(&tspSolverData);
             if (node == NULL) break;
 
-            // printf("[P: 0] Starting Distributing a node\n");    
             MPI_Send(node, 1, MPI_NODE, next, NODE_TAG, MPI_COMM_WORLD);
-            // printf("[P: 0] Ending Distributing a node\n");    
 
             next = (next + 1) % nprocs;
             if (next == 0) next = 1; //(id + 1) % nprocs;
@@ -213,21 +201,10 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     MPI_Recv(&newSolution, 1, MPI_SOLUTION, status.MPI_SOURCE, SOLUTION_TAG, MPI_COMM_WORLD, &newStatus);
                     if (_isBetterSolution(tspSolverData.solution, &newSolution)) {
 
-                        // printf("[Process %d]\n", id);
-                        // printf("--> Old Solution\n");
-                        // printSolution2(tsp, solution);
-                        // printf("--> Received Solution\n");
-                        // printSolution2(tsp, &newSolution);
-
                         _copySolution(tsp, &newSolution, tspSolverData.solution);
 
-                        // printf("--> Updated Solution\n");
-                        // printSolution2(tsp, solution);
-
-                        // printf("---------------------------------\n");
                         for (int i = 1; i < nprocs; i++)
                             MPI_Send(tspSolverData.solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
-                            //MPI_Send(&solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
 
                     }
                 }
@@ -235,11 +212,6 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     bool isProcProcessing;
                     MPI_Status processingStatus;
                     MPI_Recv(&isProcProcessing, 1, MPI_C_BOOL, status.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &processingStatus);
-
-                    //Do we have more than one message in the buffer; we only want the last one
-                    // int haveMoreMsgs = false;
-                    // MPI_Iprobe(processingStatus.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
-                    // if (haveMoreMsgs) continue;
 
                     isProcessing[status.MPI_SOURCE] = isProcProcessing;
 
@@ -253,8 +225,6 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                             }
                         }
                         if (finished) {
-                            // fprintf(stderr, "P: 0 is sending a Finish\n");
-                            // MPI_Ibcast(&finished, 1, MPI_C_BOOL, 0, MPI_COMM_WORLD, &request);
                             for (int i = 1; i < nprocs; i++)
                                 MPI_Send(&finished, 1, MPI_C_BOOL, i, TERMINATED_TAG, MPI_COMM_WORLD);
                             break;  
@@ -283,20 +253,8 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
                     if (terminate) printf("[Process %d] recv a new Solution\n", id);
 
-                    // printf("[Process %d]\n", id);
-                    // printf("--> Old Solution\n");
-                    // printSolution2(tsp, solution);
-                    
-                    // printf("--> received Solution\n");
-                    // printSolution2(tsp, &recvSolution);
-
-
                     if (_isBetterSolution(tspSolverData.solution, &recvSolution)) _copySolution(tsp, &recvSolution, tspSolverData.solution);
-                    
-                    // printf("--> Updated Solution\n");
-                    // printSolution2(tsp, solution);
-                    // printf("--------------------------\n");
-                    
+                                       
                 }
                 else if (status.MPI_TAG == NODE_TAG) {
                     if (terminate) printf("[Process %d] recv a Node\n", id);
