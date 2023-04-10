@@ -94,8 +94,7 @@ static void _updateBestTour(tspSolverData_t* tspSolverData, const Node_t* finalN
         solution->cost = cost;
         nodeCopyTour(finalNode, solution->tour);
         if (id) {
-            MPI_Request request;
-            MPI_Isend(solution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD, &request);
+            MPI_Send(solution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD);
         }
     }
 }
@@ -187,7 +186,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             if (node == NULL) break;
 
             // printf("[P: 0] Starting Distributing a node\n");    
-            MPI_Isend(node, 1, MPI_NODE, next, NODE_TAG, MPI_COMM_WORLD, &request);
+            MPI_Send(node, 1, MPI_NODE, next, NODE_TAG, MPI_COMM_WORLD);
             // printf("[P: 0] Ending Distributing a node\n");    
 
             next = (next + 1) % nprocs;
@@ -197,7 +196,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         }
 
         for (int i = 1; i < nprocs; i++)
-            MPI_Isend(&isInit, 1, MPI_C_BOOL, i, INIT_TAG, MPI_COMM_WORLD, &request);
+            MPI_Send(&isInit, 1, MPI_C_BOOL, i, INIT_TAG, MPI_COMM_WORLD);
 
 
         int flag;
@@ -211,7 +210,6 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                 if (status.MPI_TAG == SOLUTION_TAG) {
                     tspSolution_t newSolution;
                     MPI_Status newStatus;
-                    MPI_Request request[nprocs];
                     MPI_Recv(&newSolution, 1, MPI_SOLUTION, status.MPI_SOURCE, SOLUTION_TAG, MPI_COMM_WORLD, &newStatus);
                     if (_isBetterSolution(tspSolverData.solution, &newSolution)) {
 
@@ -228,7 +226,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
                         // printf("---------------------------------\n");
                         for (int i = 1; i < nprocs; i++)
-                            MPI_Isend(tspSolverData.solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD, &request[i]);
+                            MPI_Send(tspSolverData.solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
                             //MPI_Send(&solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
 
                     }
@@ -237,11 +235,13 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     bool isProcProcessing;
                     MPI_Status processingStatus;
                     MPI_Recv(&isProcProcessing, 1, MPI_C_BOOL, status.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &processingStatus);
-                    isProcessing[status.MPI_SOURCE] = isProcProcessing;
 
                     //Do we have more than one message in the buffer; we only want the last one
                     // int haveMoreMsgs = false;
                     // MPI_Iprobe(processingStatus.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
+                    // if (haveMoreMsgs) continue;
+
+                    isProcessing[status.MPI_SOURCE] = isProcProcessing;
 
                     if (!isProcProcessing) {
                         //we will only check if the process has terminated
@@ -253,11 +253,10 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                             }
                         }
                         if (finished) {
-                            MPI_Request request;
                             // fprintf(stderr, "P: 0 is sending a Finish\n");
                             // MPI_Ibcast(&finished, 1, MPI_C_BOOL, 0, MPI_COMM_WORLD, &request);
                             for (int i = 1; i < nprocs; i++)
-                                MPI_Isend(&finished, 1, MPI_C_BOOL, i, TERMINATED_TAG, MPI_COMM_WORLD, &request);
+                                MPI_Send(&finished, 1, MPI_C_BOOL, i, TERMINATED_TAG, MPI_COMM_WORLD);
                             break;  
                         } 
                     }
@@ -270,16 +269,19 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         int flag;
         bool isProcessing = true;
         bool isInit = false;
+        bool terminate = false;
         while (true) {
             flag = false;
             MPI_Status status;
-            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+            MPI_Iprobe(0, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
             if (flag) {
                 if (status.MPI_TAG == SOLUTION_TAG) {
                     tspSolution_t recvSolution;
                     MPI_Status statusSolution;
                     MPI_Recv(&recvSolution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD, &statusSolution);
+
+                    if (terminate) printf("[Process %d] recv a new Solution\n", id);
 
                     // printf("[Process %d]\n", id);
                     // printf("--> Old Solution\n");
@@ -297,6 +299,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     
                 }
                 else if (status.MPI_TAG == NODE_TAG) {
+                    if (terminate) printf("[Process %d] recv a Node\n", id);
                     isProcessing = true;
                     MPI_Status statusNode;
                     node = nodeCreate(0, 0, 1, 0);
@@ -304,10 +307,18 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     queuePush(tspSolverData.queue, node);
                 }
                 else if (status.MPI_TAG == TERMINATED_TAG) {
-                    if (isProcessing) fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
+                    bool temp;
+                    MPI_Recv(&temp, 1, MPI_C_BOOL, 0, TERMINATED_TAG, MPI_COMM_WORLD, NULL);
+
+                    if (isProcessing) {
+                        fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
+                        terminate = true;
+                        continue;
+                    }
                     break;
                 }
                 else if (status.MPI_TAG == INIT_TAG) {
+                    if (terminate) printf("[Process %d] recv a initTag\n", id);
                     MPI_Status statusInit;
                     MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, INIT_TAG, MPI_COMM_WORLD, &statusInit);
                     // if (isInit) printf("[Process %d] initalized\n", id);
@@ -320,25 +331,33 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
             if (node == NULL) {
                 // int haveMoreMsgs = false;
-                // MPI_Iprobe(MPI_ANY_SOURCE, NODE_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
+                // MPI_Iprobe(0, NODE_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
+                // if (haveMoreMsgs) continue;
 
                 //if (isProcessing && !haveMoreMsgs) {
                 if (isProcessing && isInit) {
+
+                if (terminate) printf("[Process %d] Node Is null and is !isProcessing\n", id);
                     // printf("[Process %d] is sending Finito\n", id);
                     MPI_Request request;
                     isProcessing = false;
-                    MPI_Isend(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &request);
+                    MPI_Send(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD);
                     // printf("[P: %d] End Processing\n", id);
                 } 
             }
             else {
                 // means it's processing
+                if (terminate) printf("[Process %d] Processing a node\n", id);
                 if (!isProcessing && isInit) {
-                    MPI_Request request;
+                    if (terminate) printf("[Process %d] Starting to Processing a node\n", id);
                     isProcessing = true;
-                    MPI_Isend(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &request);
+                    MPI_Send(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD);
                 }
                 _processNode(&tspSolverData, node);
+            }
+
+            if (terminate && !isProcessing) {
+                break;
             }
         }
     }
