@@ -168,7 +168,14 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         _processNode(&tspSolverData, startNode);
         nodeDestroy(startNode);
 
-        // printf("Nprocs %d\n", nprocs);
+        int numCycles = (nprocs + 2 - 1)/2;
+        for (int i = 0; i<numCycles; i++) {
+            node = _getNextNode(&tspSolverData);
+            if (node == NULL) break;
+            _processNode(&tspSolverData, node);
+            nodeDestroy(node);
+        }
+
         MPI_Request request;
         while(true) {
             //Distribute nodes across diff processes
@@ -216,7 +223,6 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     isProcessing[status.MPI_SOURCE] = isProcProcessing;
 
                     if (!isProcProcessing) {
-                        //we will only check if the process has terminated
                         bool finished = true;
                         for (int i = 1; i < nprocs; i++) {
                             if (isProcessing[i]) {
@@ -251,13 +257,11 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     MPI_Status statusSolution;
                     MPI_Recv(&recvSolution, 1, MPI_SOLUTION, 0, SOLUTION_TAG, MPI_COMM_WORLD, &statusSolution);
 
-                    if (terminate) printf("[Process %d] recv a new Solution\n", id);
 
                     if (_isBetterSolution(tspSolverData.solution, &recvSolution)) _copySolution(tsp, &recvSolution, tspSolverData.solution);
                                        
                 }
                 else if (status.MPI_TAG == NODE_TAG) {
-                    if (terminate) printf("[Process %d] recv a Node\n", id);
                     isProcessing = true;
                     MPI_Status statusNode;
                     node = nodeCreate(0, 0, 1, 0);
@@ -268,11 +272,11 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
                     bool temp;
                     MPI_Recv(&temp, 1, MPI_C_BOOL, 0, TERMINATED_TAG, MPI_COMM_WORLD, NULL);
 
-                    if (isProcessing) {
-                        fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
-                        terminate = true;
-                        continue;
-                    }
+                    // if (isProcessing) {
+                    //     fprintf(stderr, "[!] [Process %d] - Terminated While Processing\n", id);
+                    //     terminate = true;
+                    //     continue;
+                    // }
                     break;
                 }
                 else if (status.MPI_TAG == INIT_TAG) {
@@ -288,35 +292,26 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             node = _getNextNode(&tspSolverData);
 
             if (node == NULL) {
-                // int haveMoreMsgs = false;
-                // MPI_Iprobe(0, NODE_TAG, MPI_COMM_WORLD, &haveMoreMsgs, NULL);
-                // if (haveMoreMsgs) continue;
-
-                //if (isProcessing && !haveMoreMsgs) {
                 if (isProcessing && isInit) {
 
-                if (terminate) printf("[Process %d] Node Is null and is !isProcessing\n", id);
-                    // printf("[Process %d] is sending Finito\n", id);
                     MPI_Request request;
                     isProcessing = false;
                     MPI_Send(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD);
-                    // printf("[P: %d] End Processing\n", id);
                 } 
             }
             else {
                 // means it's processing
-                if (terminate) printf("[Process %d] Processing a node\n", id);
                 if (!isProcessing && isInit) {
-                    if (terminate) printf("[Process %d] Starting to Processing a node\n", id);
                     isProcessing = true;
                     MPI_Send(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD);
                 }
                 _processNode(&tspSolverData, node);
+                nodeDestroy(node);
             }
 
-            if (terminate && !isProcessing) {
-                break;
-            }
+            // if (terminate && !isProcessing) {
+            //     break;
+            // }
         }
     }
 
