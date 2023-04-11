@@ -23,7 +23,7 @@ run_tests()
         OUT_1=$PATH_OUT_1/$(basename ${TEST} .in).out
         OUT_2=$PATH_OUT_2/$(basename ${TEST} .in).out
 
-        sbatch --ntasks=$nprocs --job-name=$JOB_NAME --output=$PATH_RES --error=$PATH_TIME run_batch.sh $PATH_RUN $file $MAX_VALUE $PATH_RES $PATH_TIME $TEST $MEASUREMENTS_FILE $OUT_1 $OUT_2 
+        sbatch --time=00:02:30 --ntasks=$nprocs --job-name=$JOB_NAME --output=$PATH_RES --error=$PATH_TIME run_batch.sh $PATH_RUN $file $MAX_VALUE $PATH_RES $PATH_TIME $TEST $MEASUREMENTS_FILE $OUT_1 $OUT_2 
     done
 }
 
