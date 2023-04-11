@@ -99,7 +99,7 @@ static void _updateBestTour(tspSolverData_t* tspSolverData, const Node_t* finalN
         for (int i = 0; i < nprocs; i++) {
             if (i == id) continue;
             MPI_Send(solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
-    }
+        }
     }
 }
 
@@ -126,18 +126,18 @@ static void _processNode(tspSolverData_t* tspSolverData, Node_t* node) {
         _visitNeighbors(tspSolverData, node);
 }
 
-void _recvSolution(tspSolverData_t* tspSolverData, int source) {
+void _recvSolution(tspSolverData_t* tspSolverData, MPI_Status* status) {
     tspSolution_t recvSolution;
     MPI_Status statusSolution;
-    MPI_Recv(&recvSolution, 1, MPI_SOLUTION, source, SOLUTION_TAG, MPI_COMM_WORLD, &statusSolution);
+    MPI_Recv(&recvSolution, 1, MPI_SOLUTION, status->MPI_SOURCE, status->MPI_TAG, MPI_COMM_WORLD, &statusSolution);
 
     if (_isBetterSolution(tspSolverData->solution, &recvSolution)) _copySolution(tspSolverData->tsp, &recvSolution, tspSolverData->solution);
 }
-void _recvNode(tspSolverData_t* tspSolverData, int source) {
+void _recvNode(tspSolverData_t* tspSolverData, MPI_Status* status) {
     Node_t* node;
     MPI_Status statusNode;
     node = nodeCreate(0, 0, 1, 0);
-    MPI_Recv(node, 1, MPI_NODE, source, NODE_TAG, MPI_COMM_WORLD, &statusNode);
+    MPI_Recv(node, 1, MPI_NODE, status->MPI_SOURCE, status->MPI_TAG, MPI_COMM_WORLD, &statusNode);
     queuePush(tspSolverData->queue, node);
 }
 
@@ -216,13 +216,18 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
             if (flag) {
-                if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, status.MPI_SOURCE);
-                else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, status.MPI_SOURCE);
+                if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, &status);
+                else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, &status);
                 else if (status.MPI_TAG == ASK_NODE_TAG) {
+                    MPI_Recv(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, NULL);
                     node = _getNextNode(&tspSolverData);
                     if (node == NULL) {
                         MPI_Send(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, MASTER_NO_NODE_TAG, MPI_COMM_WORLD);
                         isTerminated[status.MPI_SOURCE] = true;
+                        bool terminated = true;
+                        for (int i = 1; i<nprocs; i++)
+                            if (!isTerminated[i]) terminated = false;
+                        if (terminated) break;
                     }
                     else {
                         MPI_Send(node, 1, MPI_NODE, status.MPI_SOURCE, MASTER_NODE_TAG, MPI_COMM_WORLD);
@@ -253,10 +258,10 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
             if (flag) {
-                if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, status.MPI_SOURCE);
-                else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, status.MPI_SOURCE);
+                if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, &status);
+                else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, &status);
                 else if (status.MPI_TAG == MASTER_NODE_TAG) {
-                    _recvSolution(&tspSolverData, status.MPI_SOURCE);
+                    _recvNode(&tspSolverData, &status);
                     askedMaster = false;
                 }
                 else if (status.MPI_TAG == MASTER_NO_NODE_TAG) {
@@ -281,7 +286,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             }
             else {
                 _processNode(&tspSolverData, node);
-                node = _getNextNode(&tspSolverData);
+                nodeDestroy(node);
             }
         }
     }
