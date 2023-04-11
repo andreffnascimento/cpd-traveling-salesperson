@@ -11,7 +11,8 @@
 #define TERMINATED_TAG 103
 #define INIT_TAG 104
 #define ASK_NODE_TAG 105
-#define NO_NODE_TAG 106
+#define MASTER_NO_NODE_TAG 106
+#define MASTER_NODE_TAG 107
 
 /*---------------------------------------------*
 ---------------- Sync Mechanisms --------------*

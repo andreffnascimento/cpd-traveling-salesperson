@@ -96,12 +96,10 @@ static void _updateBestTour(tspSolverData_t* tspSolverData, const Node_t* finalN
         solution->hasSolution = true;
         solution->cost = cost;
         nodeCopyTour(finalNode, solution->tour);
-        if (id) {
-            for (int i = 0; i < nprocs; i++) {
-                if (i == id) continue;
-                MPI_Send(solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
-            }
-        }
+        for (int i = 0; i < nprocs; i++) {
+            if (i == id) continue;
+            MPI_Send(solution, 1, MPI_SOLUTION, i, SOLUTION_TAG, MPI_COMM_WORLD);
+    }
     }
 }
 
@@ -165,8 +163,7 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
         while (true) {
             node = _getNextNode(&tspSolverData);
-            if (node == NULL)
-                break;
+            if (node == NULL) break;
             _processNode(&tspSolverData, node);
             nodeDestroy(node);
         }
@@ -177,27 +174,33 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
     } else if (!id) {
         // Initialization
+        int flag;
         int next = 1;
-        int prev = nprocs - 1;
-        bool isProcessing[nprocs];
-        bool isTerminated[nprocs];
-        memset(isProcessing, true, nprocs * sizeof(bool));
         bool isInit = true;
+        bool temp = false;
+        bool isTerminated[nprocs];
+        memset(isTerminated, false, nprocs * sizeof(bool));
 
         Node_t* startNode = nodeCreate(0, _calculateInitialLb(tsp), 1, 0);
         _processNode(&tspSolverData, startNode);
         nodeDestroy(startNode);
 
-        while (true) {
-            // Distribute nodes across diff processes
+        //TODO: we may want to save 2 nodes for the master node, since it will distribute over the other nodes
+
+        int numCycles = (nprocs + 2 - 1)/2;
+        for (int i = 0; i<numCycles; i++) {
             node = _getNextNode(&tspSolverData);
             if (node == NULL) break;
-
+            _processNode(&tspSolverData, node);
+            nodeDestroy(node);
+        }
+      
+        for (int i = 0; i < (2*nprocs); i++) {
+            node = _getNextNode(&tspSolverData);
+            if (node == NULL) break;
             MPI_Send(node, 1, MPI_NODE, next, NODE_TAG, MPI_COMM_WORLD);
-
             next = (next + 1) % nprocs;
             if (next == 0) next = 1;  //(id + 1) % nprocs;
-
             nodeDestroy(node);
         }
 
@@ -205,7 +208,6 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             MPI_Send(&isInit, 1, MPI_C_BOOL, i, INIT_TAG, MPI_COMM_WORLD);
 
         //Works as special Process
-        int flag;
         next = 1;
 
         while (true) {
@@ -216,59 +218,34 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             if (flag) {
                 if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, status.MPI_SOURCE);
                 else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, status.MPI_SOURCE);
-                else if (status.MPI_TAG == PROCESSING_STATUS_TAG) {
-                    bool isProcProcessing;
-                    MPI_Status processingStatus;
-                    MPI_Recv(&isProcProcessing, 1, MPI_C_BOOL, status.MPI_SOURCE, PROCESSING_STATUS_TAG, MPI_COMM_WORLD, &processingStatus);
-                    isProcessing[status.MPI_SOURCE] = isProcProcessing;
-
-                    if (!isProcProcessing) {
-                        bool finished = true;
-                        for (int i = 1; i < nprocs; i++) {
-                            if (isProcessing[i]) {
-                                finished = false;
-                                break;
-                            }
-                        }
-                        if (finished) {
-                            for (int i = 1; i < nprocs; i++)
-                                MPI_Send(&finished, 1, MPI_C_BOOL, i, TERMINATED_TAG, MPI_COMM_WORLD);
-                        } 
+                else if (status.MPI_TAG == ASK_NODE_TAG) {
+                    node = _getNextNode(&tspSolverData);
+                    if (node == NULL) {
+                        MPI_Send(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, MASTER_NO_NODE_TAG, MPI_COMM_WORLD);
+                        isTerminated[status.MPI_SOURCE] = true;
                     }
-                }
-                else if (status.MPI_TAG == TERMINATED_TAG) {
-                    bool _isTerminated, finished = true;
-                    MPI_Recv(&_isTerminated, 1, MPI_C_BOOL, status.MPI_SOURCE, TERMINATED_TAG, MPI_COMM_WORLD, NULL);
-                    isTerminated[status.MPI_SOURCE] = _isTerminated;
-                    finished = true;
-                    for (int i = 1; i < nprocs; i++)
-                        if (!isTerminated[i]) finished = false;
-    
-                    if (finished) break;
-
+                    else {
+                        MPI_Send(node, 1, MPI_NODE, status.MPI_SOURCE, MASTER_NODE_TAG, MPI_COMM_WORLD);
+                    }
                 }
             }
             node = _getNextNode(&tspSolverData);
 
-            if (!node) continue;
+            if (node == NULL) continue;
 
             _processNode(&tspSolverData, node);
+            nodeDestroy(node);
         }
 
         
     } else {
         // All Other processes
-        //  Zero needs to have the latest solution
 
         int flag;
-        bool isInit = false;
-        bool isProcessing = true;
-        bool isTerminating = false;
-        int next = id + 1;
-        int prev = id - 1;
-        int sender = 0;
-        if (id == (nprocs - 1)) next = 0;
-
+        bool isInit = false; // can only ask nodes after initialization has finished
+        int MASTER_SOURCE = 0;
+        bool askedMaster = false; // used only for ask once to master for a node
+        bool temp = false;
 
         while (true) {
             flag = false;
@@ -276,51 +253,35 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
             MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
             if (flag) {
-                if (status.MPI_TAG == SOLUTION_TAG) {
+                if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, status.MPI_SOURCE);
+                else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, status.MPI_SOURCE);
+                else if (status.MPI_TAG == MASTER_NODE_TAG) {
                     _recvSolution(&tspSolverData, status.MPI_SOURCE);
-                } 
-                else if (status.MPI_TAG == NODE_TAG) {
-                    if (!isProcessing && isInit) {
-                        isProcessing = true;
-                        MPI_Send(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD);
-                    }
-                    isProcessing = true;
-                    _recvNode(&tspSolverData, status.MPI_SOURCE);
-                } 
-                else if (status.MPI_TAG == TERMINATED_TAG) {
-                    bool temp;
-                    MPI_Recv(&temp, 1, MPI_C_BOOL, 0, TERMINATED_TAG, MPI_COMM_WORLD, NULL);
-
-                    isTerminating = true;
-                    if (isProcessing) printf("[Process %d] termination started while processing\n", id);
-                    continue;
+                    askedMaster = false;
+                }
+                else if (status.MPI_TAG == MASTER_NO_NODE_TAG) {
+                    MPI_Status tempStatus;
+                    MPI_Recv(&temp, 1, MPI_C_BOOL, MASTER_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
+                    break;
                 }
                 else if (status.MPI_TAG == INIT_TAG) {
-                    MPI_Status statusInit;
-                    MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, INIT_TAG, MPI_COMM_WORLD, &statusInit);
-                }
+                    MPI_Status tempStatus;
+                    MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
+                } 
             }
             node = _getNextNode(&tspSolverData);
 
             if (node == NULL) {
-                if (isTerminating) {
-                    MPI_Send(&isTerminating, 1, MPI_C_BOOL, 0, TERMINATED_TAG, MPI_COMM_WORLD);
-                    break;
-                }
-                if (isProcessing && isInit) {
-                    isProcessing = false;
-                    MPI_Send(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD);
+                if (!askedMaster && isInit) {
+                    //ask master for a new node
+                    MPI_Send(&temp, 1, MPI_C_BOOL, MASTER_SOURCE, ASK_NODE_TAG, MPI_COMM_WORLD);
+                    askedMaster = true;
                 }
                 continue;
             }
             else {
-                if (!isProcessing && isInit) {
-                    isProcessing = true;
-                    MPI_Send(&isProcessing, 1, MPI_C_BOOL, 0, PROCESSING_STATUS_TAG, MPI_COMM_WORLD);
-                }
                 _processNode(&tspSolverData, node);
                 node = _getNextNode(&tspSolverData);
-
             }
         }
     }
