@@ -22,8 +22,9 @@ run_tests()
         MEASUREMENTS_FILE=${OUTPUT_DIR}/mpi/measurements_$nprocs.txt
         OUT_1=$PATH_OUT_1/$(basename ${TEST} .in).out
         OUT_2=$PATH_OUT_2/$(basename ${TEST} .in).out
+        CPUS_PER_TASKS=2
 
-        sbatch --exclude=lab5p[1-20],lab6p[1-9],lab7p[1-9] --cpus-per-task=4 --time=00:02:30 --ntasks=$nprocs --job-name=$JOB_NAME --output=$PATH_RES --error=$PATH_TIME run_batch.sh $PATH_RUN $file $MAX_VALUE $PATH_RES $PATH_TIME $TEST $MEASUREMENTS_FILE $OUT_1 $OUT_2 
+        sbatch --exclude=lab5p[1-20],lab6p[1-9],lab7p[1-9] --cpus-per-task=$CPUS_PER_TASKS --time=00:02:30 --ntasks=$nprocs --job-name=$JOB_NAME --output=$PATH_RES --error=$PATH_TIME run_batch.sh $PATH_RUN $file $MAX_VALUE $PATH_RES $PATH_TIME $TEST $MEASUREMENTS_FILE $OUT_1 $OUT_2 $CPUS_PER_TASKS
     done
 }
 
