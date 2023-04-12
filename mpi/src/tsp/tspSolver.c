@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <mpi.h>
+#include <time.h>
 
 #include "mpiHandler.h"
 #include "node.h"
@@ -291,8 +292,8 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         }
     }
 
-    // queueDestroy(tspSolverData.queue, __tspNodeDestroyFun);
-    // if (id) tspSolutionDestroy(tspSolverData.solution);
+    queueDestroy(tspSolverData.queue, __tspNodeDestroyFun);
+    if (id) tspSolutionDestroy(tspSolverData.solution);
 
     MPI_Barrier(MPI_COMM_WORLD);
 
