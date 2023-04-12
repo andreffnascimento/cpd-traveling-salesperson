@@ -10,7 +10,7 @@ MEASUREMENTS_FILE=$7
 OUT_1=$8
 OUT_2=$9
 
-srun ${PATH_RUN} ${file} ${MAX_VALUE}
+srun --cpus-per-task=4 ${PATH_RUN} ${file} ${MAX_VALUE}
 
 touch $MEASUREMENTS_FILE
 

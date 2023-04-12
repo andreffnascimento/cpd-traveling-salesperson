@@ -55,8 +55,13 @@ int main(int argc, char* argv[]) {
     tsp_t tsp = parseInput(inPath);
     DEBUG(tspPrint(&tsp));
 
+    int numThreads;
+    #pragma omp parallel
+    #pragma omp single
+    numThreads = omp_get_num_threads();
+
     double execTime = -omp_get_wtime();
-    tspSolution_t* solution = tspSolve(&tsp, maxTourCost);
+    tspSolution_t* solution = tspSolve(&tsp, maxTourCost, numThreads);
     execTime += omp_get_wtime();
 
     fprintf(stderr, "%.1fs\n", execTime);

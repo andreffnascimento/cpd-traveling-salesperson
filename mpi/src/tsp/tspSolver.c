@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <mpi.h>
+#include <omp.h>
 #include <time.h>
 
 #include "mpiHandler.h"
@@ -44,7 +45,9 @@ static inline bool _isCityInTour(const Node_t* node, int cityNumber) {
 }
 
 static Node_t* _getNextNode(tspSolverData_t* tspSolverData) {
-    Node_t* node = queuePop(tspSolverData->queue);
+    Node_t* node;
+    #pragma omp critical(queue)
+    node = queuePop(tspSolverData->queue);
     if (node != NULL && node->lb >= tspSolverData->solution->cost) {
         return NULL;
     }
@@ -93,6 +96,7 @@ static void _updateBestTour(tspSolverData_t* tspSolverData, const Node_t* finalN
     bool isNewSolution = !solution->hasSolution || cost < solution->cost ||
                          (cost == solution->cost && currentCity < solution->tour[tsp->nCities - 1]);
 
+    #pragma omp critical(solution)
     if (isNewSolution) {
         solution->hasSolution = true;
         solution->cost = cost;
@@ -114,6 +118,7 @@ static void _visitNeighbors(tspSolverData_t* tspSolverData, const Node_t* parent
                 continue;
             double cost = parent->cost + tsp->roadCosts[parentCurrentCity][cityNumber];
             Node_t* nextNode = nodeExtend(parent, cost, lb, cityNumber);
+            #pragma omp critical(queue)
             queuePush(tspSolverData->queue, nextNode);
         }
     }
@@ -132,6 +137,7 @@ void _recvSolution(tspSolverData_t* tspSolverData, MPI_Status* status) {
     MPI_Status statusSolution;
     MPI_Recv(&recvSolution, 1, MPI_SOLUTION, status->MPI_SOURCE, status->MPI_TAG, MPI_COMM_WORLD, &statusSolution);
 
+    #pragma omp critical(solution)
     if (_isBetterSolution(tspSolverData->solution, &recvSolution)) _copySolution(tspSolverData->tsp, &recvSolution, tspSolverData->solution);
 }
 void _recvNode(tspSolverData_t* tspSolverData, MPI_Status* status) {
@@ -139,11 +145,15 @@ void _recvNode(tspSolverData_t* tspSolverData, MPI_Status* status) {
     MPI_Status statusNode;
     node = nodeCreate(0, 0, 1, 0);
     MPI_Recv(node, 1, MPI_NODE, status->MPI_SOURCE, status->MPI_TAG, MPI_COMM_WORLD, &statusNode);
+    #pragma omp critical(queue)
     queuePush(tspSolverData->queue, node);
 }
 
-tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
-    MPI_Init(NULL, NULL);
+tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost, int numThreads) {
+    // MPI_Init(NULL, NULL);
+    int supportLevel;
+    MPI_Init_thread(NULL, NULL, MPI_THREAD_SERIALIZED, &supportLevel);
+    // if (supportLevel == MPI_THREAD_SERIALIZED) printf("Thread Serialized is Supported\n");
 
     MPI_Comm_rank(MPI_COMM_WORLD, &id);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
@@ -155,15 +165,15 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
     tspSolverData.tsp = tsp;
     tspSolverData.solution = tspSolutionCreate(maxTourCost);
     tspSolverData.queue = queueCreate(__tspNodeCmpFun);
-    Node_t* node;
 
     if (nprocs == 1) {
         Node_t* startNode = nodeCreate(0, _calculateInitialLb(tsp), 1, 0);
         _processNode(&tspSolverData, startNode);
         nodeDestroy(startNode);
 
+        #pragma omp parallel
         while (true) {
-            node = _getNextNode(&tspSolverData);
+            Node_t* node = _getNextNode(&tspSolverData);
             if (node == NULL) break;
             _processNode(&tspSolverData, node);
             nodeDestroy(node);
@@ -175,11 +185,11 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
     } else if (!id) {
         // Initialization
-        int flag;
         int next = 1;
         bool isInit = true;
         bool temp = false;
         bool isTerminated[nprocs];
+        bool isTerminating = false;
         memset(isTerminated, false, nprocs * sizeof(bool));
 
         Node_t* startNode = nodeCreate(0, _calculateInitialLb(tsp), 1, 0);
@@ -190,14 +200,14 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
 
         int numCycles = (nprocs + 2 - 1)/2;
         for (int i = 0; i<numCycles; i++) {
-            node = _getNextNode(&tspSolverData);
+            Node_t* node = _getNextNode(&tspSolverData);
             if (node == NULL) break;
             _processNode(&tspSolverData, node);
             nodeDestroy(node);
         }
       
         for (int i = 0; i < (2*nprocs); i++) {
-            node = _getNextNode(&tspSolverData);
+            Node_t* node = _getNextNode(&tspSolverData);
             if (node == NULL) break;
             MPI_Send(node, 1, MPI_NODE, next, NODE_TAG, MPI_COMM_WORLD);
             next = (next + 1) % nprocs;
@@ -208,42 +218,55 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         for (int i = 1; i < nprocs; i++)
             MPI_Send(&isInit, 1, MPI_C_BOOL, i, INIT_TAG, MPI_COMM_WORLD);
 
-        //Works as special Process
-        next = 1;
+        // printf("Num Threads %d\n", numThreads);
 
+        #pragma omp parallel
         while (true) {
-            flag = false;
-            MPI_Status status;
-            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+        if (isTerminating)
+                break;
+            
+            // #pragma omp single
+            #pragma omp critical
+            {
+                int flag = false;
+                MPI_Status status;
+                MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
 
-            if (flag) {
-                if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, &status);
-                else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, &status);
-                else if (status.MPI_TAG == ASK_NODE_TAG) {
-                    MPI_Recv(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, NULL);
-                    node = _getNextNode(&tspSolverData);
-                    if (node == NULL) {
-                        MPI_Send(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, MASTER_NO_NODE_TAG, MPI_COMM_WORLD);
-                        isTerminated[status.MPI_SOURCE] = true;
-                        bool terminated = true;
-                        for (int i = 1; i<nprocs; i++)
-                            if (!isTerminated[i]) terminated = false;
-                        if (terminated) break;
+                if (flag) {
+
+                    if (status.MPI_TAG == SOLUTION_TAG) {
+                        _recvSolution(&tspSolverData, &status);
                     }
-                    else {
-                        MPI_Send(node, 1, MPI_NODE, status.MPI_SOURCE, MASTER_NODE_TAG, MPI_COMM_WORLD);
+                    // else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, &status);
+                    else if (status.MPI_TAG == ASK_NODE_TAG) {
+                        MPI_Recv(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, NULL);
+                        Node_t* node = _getNextNode(&tspSolverData);
+                        if (node == NULL) {
+                            MPI_Send(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, MASTER_NO_NODE_TAG, MPI_COMM_WORLD);
+                            isTerminated[status.MPI_SOURCE] = true;
+                            bool terminated = true;
+                            for (int i = 1; i<nprocs; i++)
+                                if (!isTerminated[i]) terminated = false;
+                            if (terminated) {
+                                #pragma omp atomic write
+                                isTerminating = true;
+                            }
+                        }
+                        else {
+                            MPI_Send(node, 1, MPI_NODE, status.MPI_SOURCE, MASTER_NODE_TAG, MPI_COMM_WORLD);
+                        }
                     }
                 }
             }
-            node = _getNextNode(&tspSolverData);
 
-            if (node == NULL) continue;
+            Node_t* node = _getNextNode(&tspSolverData);
+
+            if (node == NULL)
+                continue;
 
             _processNode(&tspSolverData, node);
             nodeDestroy(node);
         }
-
-        
     } else {
         // All Other processes
 
@@ -252,35 +275,45 @@ tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
         int MASTER_SOURCE = 0;
         bool askedMaster = false; // used only for ask once to master for a node
         bool temp = false;
+        bool isTerminating = false;
 
+        #pragma omp parallel
         while (true) {
-            flag = false;
-            MPI_Status status;
-            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+            if (isTerminating) break;
 
-            if (flag) {
-                if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, &status);
-                else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, &status);
-                else if (status.MPI_TAG == MASTER_NODE_TAG) {
-                    _recvNode(&tspSolverData, &status);
-                    askedMaster = false;
+            #pragma omp critical(message) 
+            {
+                flag = false;
+                MPI_Status status;
+                MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
+
+                if (flag) {
+                    if (status.MPI_TAG == SOLUTION_TAG) _recvSolution(&tspSolverData, &status);
+                    else if (status.MPI_TAG == NODE_TAG) _recvNode(&tspSolverData, &status);
+                    else if (status.MPI_TAG == MASTER_NODE_TAG) {
+                        _recvNode(&tspSolverData, &status);
+                        #pragma omp atomic write
+                        askedMaster = false;
+                    }
+                    else if (status.MPI_TAG == MASTER_NO_NODE_TAG) {
+                        MPI_Status tempStatus;
+                        MPI_Recv(&temp, 1, MPI_C_BOOL, MASTER_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
+                        isTerminating = true;
+                    }
+                    else if (status.MPI_TAG == INIT_TAG) {
+                        MPI_Status tempStatus;
+                        MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
+                    } 
                 }
-                else if (status.MPI_TAG == MASTER_NO_NODE_TAG) {
-                    MPI_Status tempStatus;
-                    MPI_Recv(&temp, 1, MPI_C_BOOL, MASTER_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
-                    break;
-                }
-                else if (status.MPI_TAG == INIT_TAG) {
-                    MPI_Status tempStatus;
-                    MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
-                } 
             }
-            node = _getNextNode(&tspSolverData);
+            Node_t* node = _getNextNode(&tspSolverData);
 
             if (node == NULL) {
+                #pragma omp critical(askedMaster)
                 if (!askedMaster && isInit) {
                     //ask master for a new node
                     MPI_Send(&temp, 1, MPI_C_BOOL, MASTER_SOURCE, ASK_NODE_TAG, MPI_COMM_WORLD);
+                    #pragma omp atomic write
                     askedMaster = true;
                 }
                 continue;
