@@ -23,9 +23,26 @@ void tspNodeDestroy(tspNode_t* node) {
     node = NULL;
 }
 
-void tspNodeCopyTour(const tspNode_t* node, char* container) {
+tspNode_t* tspNodeInit(tspNode_t* node, double cost, double lb, int length, int currentCity) {
+    node->cost = cost;
+    node->lb = lb;
+    node->priority = lb * MAX_CITIES + currentCity;
+    node->length = length;
+    node->tour[node->length - 1] = currentCity;
+    node->visited = 0x00000001 << currentCity;
+    return node;
+}
+
+tspNode_t* tspNodeInitExt(tspNode_t* node, const tspNode_t* parent, double cost, double lb, int currentCity) {
+    tspNodeInit(node, cost, lb, parent->length + 1, currentCity);
+    node->visited |= parent->visited;
+    tspNodeCopyTour(parent, node->tour);
+    return node;
+}
+
+void tspNodeCopyTour(const tspNode_t* node, char* tour) {
     for (int i = 0; i < node->length; i++)
-        container[i] = node->tour[i];
+        tour[i] = node->tour[i];
 }
 
 void tspNodePrint(const tspNode_t* node) {

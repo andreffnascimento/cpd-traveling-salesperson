@@ -11,7 +11,7 @@ tspNode_t* tspNodeCreate(double cost, double lb, int length, int currentCity) {
     return node;
 }
 
-tspNode_t* tspNodeExtend(const tspNode_t* parent, double cost, double lb, int currentCity) {
+tspNode_t* tspNodeCreateExt(const tspNode_t* parent, double cost, double lb, int currentCity) {
     tspNode_t* node = tspNodeCreate(cost, lb, parent->length + 1, currentCity);
     node->visited |= parent->visited;
     tspNodeCopyTour(parent, node->tour);
@@ -23,9 +23,9 @@ void tspNodeDestroy(tspNode_t* node) {
     node = NULL;
 }
 
-void tspNodeCopyTour(const tspNode_t* tspNode, char* container) {
-    for (int i = 0; i < tspNode->length; i++)
-        container[i] = tspNode->tour[i];
+void tspNodeCopyTour(const tspNode_t* node, char* container) {
+    for (int i = 0; i < node->length; i++)
+        container[i] = node->tour[i];
 }
 
 void tspNodePrint(const tspNode_t* node) {

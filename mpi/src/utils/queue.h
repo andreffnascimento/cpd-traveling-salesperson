@@ -3,7 +3,10 @@
 
 #include "include.h"
 
-typedef struct _priorityQueue priorityQueue_t; 
+#define QUEUE_INITIAL_SIZE 1024
+#define QUEUE_SIZE_MULTIPLIER(SIZE) SIZE * 2
+
+typedef struct _priorityQueue priorityQueue_t;
 
 priorityQueue_t* queueCreate(int (*cmpFun)(void*, void*));
 void queueDestroy(priorityQueue_t* queue, void (*delFun)(void*));
