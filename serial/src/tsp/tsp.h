@@ -3,6 +3,9 @@
 
 #include "include.h"
 
+#define MAX_CITIES 64
+#define NONEXISTENT_ROAD_VALUE -1
+
 #define TSP_TOTAL_MIN_COSTS 2
 #define TSP_MIN_COSTS_1 0
 #define TSP_MIN_COSTS_2 1

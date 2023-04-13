@@ -4,9 +4,9 @@
 #include <pthread.h>
 
 static int __tspNodeCmpFun(void* el1, void* el2) {
-    tspNode_t* tspNode1 = (tspNode_t*)el1;
-    tspNode_t* tspNode2 = (tspNode_t*)el2;
-    return (tspNode2->priority < tspNode1->priority ? 1 : 0);
+    tspNode_t* node1 = (tspNode_t*)el1;
+    tspNode_t* node2 = (tspNode_t*)el2;
+    return (node2->priority < node1->priority ? 1 : 0);
 }
 
 static void __tspNodeDestroyFun(void* el) {
@@ -138,7 +138,7 @@ tspNode_t* tspLoadBalancerPop(tspLoadBalancer_t* tspLoadBalancer, double* soluti
     return node;
 }
 
-tspNode_t* tspLoadBalancerPush(tspLoadBalancer_t* tspLoadBalancer, tspNode_t* tspNode) {
+tspNode_t* tspLoadBalancerPush(tspLoadBalancer_t* tspLoadBalancer, tspNode_t* node) {
     threadInfo_t* thread = NULL;
 #pragma omp critical(pushIndex)
     {
@@ -147,7 +147,7 @@ tspNode_t* tspLoadBalancerPush(tspLoadBalancer_t* tspLoadBalancer, tspNode_t* ts
     }
 
     omp_set_lock(&thread->queueLock);
-    tspNode_t* node = (tspNode_t*)queuePush(thread->queue, tspNode);
+    node = (tspNode_t*)queuePush(thread->queue, node);
     omp_unset_lock(&thread->queueLock);
 
     if (_startThread(tspLoadBalancer, thread)) {

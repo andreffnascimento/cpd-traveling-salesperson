@@ -32,23 +32,23 @@ static double _calculateInitialLb(const tsp_t* tsp) {
 }
 
 static double _calculateLb(const tsp_t* tsp, const tspNode_t* node, int nextCity) {
-    int nodeCurrentCity = tspNodeCurrentCity(node);
-    double min1From = tspMinCost(tsp, nodeCurrentCity, TSP_MIN_COSTS_1);
-    double min2From = tspMinCost(tsp, nodeCurrentCity, TSP_MIN_COSTS_2);
+    int currentCity = tspNodeCurrentCity(node);
+    double min1From = tspMinCost(tsp, currentCity, TSP_MIN_COSTS_1);
+    double min2From = tspMinCost(tsp, currentCity, TSP_MIN_COSTS_2);
     double min1To = tspMinCost(tsp, nextCity, TSP_MIN_COSTS_1);
     double min2To = tspMinCost(tsp, nextCity, TSP_MIN_COSTS_2);
-    double costFromTo = tsp->roadCosts[nodeCurrentCity][nextCity];
+    double costFromTo = tsp->roadCosts[currentCity][nextCity];
     double costFrom = (costFromTo >= min2From) ? min2From : min1From;
     double costTo = (costFromTo >= min2To) ? min2To : min1To;
     return node->lb + costFromTo - (costFrom + costTo) / 2;
 }
 
-static void _updateBestTour(tspSolverData_t* tspSolverData, const tspNode_t* finalNode) {
-    const tsp_t* tsp = tspSolverData->tsp;
-    tspSolution_t* solution = tspSolverData->solution;
-    int nodeCurrentCity = tspNodeCurrentCity(finalNode);
-    double cost = finalNode->cost + tsp->roadCosts[nodeCurrentCity][0];
-    double priority = cost * MAX_CITIES + nodeCurrentCity;
+static void _updateBestTour(tspSolverData_t* solverData, const tspNode_t* finalNode) {
+    const tsp_t* tsp = solverData->tsp;
+    tspSolution_t* solution = solverData->solution;
+    int currentCity = tspNodeCurrentCity(finalNode);
+    double cost = finalNode->cost + tsp->roadCosts[currentCity][0];
+    double priority = cost * MAX_CITIES + currentCity;
 #pragma omp critical(solution)
     if (priority < solution->priority) {
         tspNodeCopyTour(finalNode, solution->tour);
@@ -58,53 +58,53 @@ static void _updateBestTour(tspSolverData_t* tspSolverData, const tspNode_t* fin
     }
 }
 
-static void _visitNeighbors(tspSolverData_t* tspSolverData, const tspNode_t* parent) {
-    const tsp_t* tsp = tspSolverData->tsp;
+static void _visitNeighbors(tspSolverData_t* solverData, const tspNode_t* parent) {
+    const tsp_t* tsp = solverData->tsp;
     int parentCurrentCity = tspNodeCurrentCity(parent);
     for (int cityNumber = 0; cityNumber < tsp->nCities; cityNumber++) {
         if (tspIsNeighbour(tsp, parentCurrentCity, cityNumber) && !_isCityInTour(parent, cityNumber)) {
             double lb = _calculateLb(tsp, parent, cityNumber);
-            if (lb > tspSolverData->solution->cost)
+            if (lb > solverData->solution->cost)
                 continue;
             double cost = parent->cost + tsp->roadCosts[parentCurrentCity][cityNumber];
-            tspNode_t* nextNode = tspNodeExtend(parent, cost, lb, cityNumber);
-            tspLoadBalancerPush(tspSolverData->loadBalancer, nextNode);
+            tspNode_t* nextNode = tspNodeCreateExt(parent, cost, lb, cityNumber);
+            tspLoadBalancerPush(solverData->loadBalancer, nextNode);
         }
     }
 }
 
-static void _processNode(tspSolverData_t* tspSolverData, tspNode_t* node) {
-    const tsp_t* tsp = tspSolverData->tsp;
+static void _processNode(tspSolverData_t* solverData, tspNode_t* node) {
+    const tsp_t* tsp = solverData->tsp;
     if ((node->length == tsp->nCities) && tspIsNeighbour(tsp, tspNodeCurrentCity(node), 0))
-        _updateBestTour(tspSolverData, node);
+        _updateBestTour(solverData, node);
     else
-        _visitNeighbors(tspSolverData, node);
+        _visitNeighbors(solverData, node);
 }
 
 tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
-    tspSolverData_t tspSolverData;
+    tspSolverData_t solverData;
 
 #pragma omp parallel num_threads(6)
     {
 #pragma omp single
         {
-            tspSolverData.tsp = tsp;
-            tspSolverData.solution = tspSolutionCreate(maxTourCost);
-            tspSolverData.loadBalancer = tspLoadBalancerCreate(omp_get_num_threads());
+            solverData.tsp = tsp;
+            solverData.solution = tspSolutionCreate(maxTourCost);
+            solverData.loadBalancer = tspLoadBalancerCreate(omp_get_num_threads());
             tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(tsp), 1, 0);
-            _processNode(&tspSolverData, startNode);
+            _processNode(&solverData, startNode);
             tspNodeDestroy(startNode);
         }
 
         while (true) {
-            tspNode_t* node = tspLoadBalancerPop(tspSolverData.loadBalancer, &tspSolverData.solution->priority);
+            tspNode_t* node = tspLoadBalancerPop(solverData.loadBalancer, &solverData.solution->priority);
             if (node == NULL)
                 break;
-            _processNode(&tspSolverData, node);
+            _processNode(&solverData, node);
             tspNodeDestroy(node);
         }
     }
 
-    tspLoadBalancerDestroy(tspSolverData.loadBalancer);
-    return tspSolverData.solution;
+    tspLoadBalancerDestroy(solverData.loadBalancer);
+    return solverData.solution;
 }

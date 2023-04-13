@@ -4,10 +4,10 @@
 #include "include.h"
 #include "tsp.h"
 
-
 typedef struct {
     bool hasSolution;
     double cost;
+    double priority;
     char tour[MAX_CITIES];
 } tspSolution_t;
 
