@@ -1,16 +1,25 @@
 #include "tspSolver.h"
-#include "tspApi.h"
 #include "tspNode.h"
 #include "utils/queue.h"
 #include <math.h>
 #include <mpi.h>
-#include <time.h>
+#include <omp.h>
+
+#define INITIAL_CONTROL_DELAY 1
+#define CONTROL_DELAY_MULTIPLIER(DELAY) DELAY * 1.2
 
 typedef struct {
     const tsp_t* tsp;
     tspApi_t* api;
     tspSolution_t* solution;
     priorityQueue_t* queue;
+
+    bool controlBlock;
+    double controlTime;
+    double controlDelay;
+    tspApiControl_t controlMsgIn;
+    tspApiControl_t controlMsgOut;
+    MPI_Request controlRequest;
 } tspSolverData_t;
 
 tspSolution_t* tspSolutionCreate(double maxTourCost) {
@@ -22,18 +31,6 @@ tspSolution_t* tspSolutionCreate(double maxTourCost) {
 }
 
 void tspSolutionDestroy(tspSolution_t* solution) { free(solution); }
-
-static inline bool _isBetterSolution(tspSolution_t* oldSolution, tspSolution_t* newSolution) {
-    return newSolution->priority < oldSolution->priority;
-}
-
-static void _copySolution(const tsp_t* tsp, tspSolution_t* srcSolution, tspSolution_t* destSolution) {
-    destSolution->hasSolution = srcSolution->hasSolution;
-    destSolution->cost = srcSolution->cost;
-    destSolution->priority = srcSolution->priority;
-    for (int i = 0; i < tsp->nCities; i++)
-        destSolution->tour[i] = srcSolution->tour[i];
-}
 
 static int __tspNodeCmpFun(void* el1, void* el2) {
     tspNode_t* node1 = (tspNode_t*)el1;
@@ -90,13 +87,6 @@ static void _updateBestTour(tspSolverData_t* solverData, const tspNode_t* finalN
         solution->hasSolution = true;
         solution->cost = cost;
         solution->priority = cost * MAX_CITIES + solution->tour[tsp->nCities - 1];
-
-        // HACK: Maybe an Isend?? Also clean this pls
-        for (int i = 0; i < solverData->api->nProcs; i++) {
-            if (i == solverData->api->procId)
-                continue;
-            MPI_Send(solution, 1, solverData->api->solution_t, i, MPI_TAG_SOLUTION, MPI_COMM_WORLD);
-        }
     }
 }
 
@@ -123,186 +113,182 @@ static void _processNode(tspSolverData_t* solverData, tspNode_t* node) {
         _visitNeighbors(solverData, node);
 }
 
-void _recvSolution(tspSolverData_t* solverData, MPI_Status* status) {
-    tspSolution_t recvSolution;
-    MPI_Status statusSolution;
-    MPI_Recv(&recvSolution, 1, solverData->api->solution_t, status->MPI_SOURCE, status->MPI_TAG, MPI_COMM_WORLD,
-             &statusSolution);
-
-    if (_isBetterSolution(solverData->solution, &recvSolution))
-        _copySolution(solverData->tsp, &recvSolution, solverData->solution);
-}
-void _recvNode(tspSolverData_t* solverData, MPI_Status* status) {
-    tspNode_t* node;
-    MPI_Status statusNode;
-    node = tspNodeCreate(0, 0, 1, 0);
-    MPI_Recv(node, 1, solverData->api->node_t, status->MPI_SOURCE, status->MPI_TAG, MPI_COMM_WORLD, &statusNode);
-    queuePush(solverData->queue, node);
-}
-
-void _singleProcSolve(tspSolverData_t* solverData) {
-    tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(solverData->tsp), 1, 0);
-    _processNode(solverData, startNode);
-    tspNodeDestroy(startNode);
-
-    while (true) {
-        tspNode_t* node = _getNextNode(solverData->queue, solverData->solution->priority);
-        if (node == NULL)
-            break;
-        _processNode(solverData, node);
-        tspNodeDestroy(node);
-    }
-}
-
-void _multipleProcSolve(tspSolverData_t* solverData) {
+static void _processStartNode(tspSolverData_t* solverData) {
     if (solverData->api->procType == PROCTYPE_MASTER) {
-        // Initialization
-        int flag;
-        int next = 1;
-        bool isInit = true;
-        bool temp = false;
-        bool isTerminated[solverData->api->nProcs];
-        memset(isTerminated, false, solverData->api->nProcs * sizeof(bool));
-
         tspNode_t* startNode = tspNodeCreate(0, _calculateInitialLb(solverData->tsp), 1, 0);
         _processNode(solverData, startNode);
         tspNodeDestroy(startNode);
-
-        // TODO: we may want to save 2 nodes for the master node, since it will distribute over the other nodes
-
-        int numCycles = (solverData->api->nProcs + 2 - 1) / 2;
-        for (int i = 0; i < numCycles; i++) {
-            tspNode_t* node = _getNextNode(solverData->queue, solverData->solution->priority);
-            if (node == NULL)
-                break;
-            _processNode(solverData, node);
-            tspNodeDestroy(node);
-        }
-
-        for (int i = 0; i < (2 * solverData->api->nProcs); i++) {
-            tspNode_t* node = _getNextNode(solverData->queue, solverData->solution->priority);
-            if (node == NULL)
-                break;
-            MPI_Send(node, 1, solverData->api->node_t, next, MPI_TAG_NODE, MPI_COMM_WORLD);
-            next = (next + 1) % solverData->api->nProcs;
-            if (next == 0)
-                next = 1; //(id + 1) % nprocs;
-            tspNodeDestroy(node);
-        }
-
-        for (int i = 1; i < solverData->api->nProcs; i++)
-            MPI_Send(&isInit, 1, MPI_C_BOOL, i, MPI_TAG_INIT, MPI_COMM_WORLD);
-
-        // Works as special Process
-        next = 1;
-
-        while (true) {
-            flag = false;
-            MPI_Status status;
-            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
-
-            if (flag) {
-                if (status.MPI_TAG == MPI_TAG_SOLUTION)
-                    _recvSolution(solverData, &status);
-                else if (status.MPI_TAG == MPI_TAG_NODE)
-                    _recvNode(solverData, &status);
-                else if (status.MPI_TAG == MPI_TAG_ASK_NODE) {
-                    MPI_Recv(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, NULL);
-                    tspNode_t* node = _getNextNode(solverData->queue, solverData->solution->priority);
-                    if (node == NULL) {
-                        MPI_Send(&temp, 1, MPI_C_BOOL, status.MPI_SOURCE, MPI_TAG_TODO1, MPI_COMM_WORLD);
-                        isTerminated[status.MPI_SOURCE] = true;
-                        bool terminated = true;
-                        for (int i = 1; i < solverData->api->nProcs; i++)
-                            if (!isTerminated[i])
-                                terminated = false;
-                        if (terminated)
-                            break;
-                    } else {
-                        MPI_Send(node, 1, solverData->api->node_t, status.MPI_SOURCE, MPI_TAG_TODO2, MPI_COMM_WORLD);
-                    }
-                }
-            }
-            tspNode_t* node = _getNextNode(solverData->queue, solverData->solution->priority);
-
-            if (node == NULL)
-                continue;
-
-            _processNode(solverData, node);
-            tspNodeDestroy(node);
-        }
-
-    } else {
-        // All Other processes
-
-        int flag;
-        bool isInit = false; // can only ask nodes after initialization has finished
-        int MASTER_SOURCE = 0;
-        bool askedMaster = false; // used only for ask once to master for a node
-        bool temp = false;
-
-        while (true) {
-            flag = false;
-            MPI_Status status;
-            MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &status);
-
-            if (flag) {
-                if (status.MPI_TAG == MPI_TAG_SOLUTION)
-                    _recvSolution(solverData, &status);
-                else if (status.MPI_TAG == MPI_TAG_NODE)
-                    _recvNode(solverData, &status);
-                else if (status.MPI_TAG == MPI_TAG_TODO2) {
-                    _recvNode(solverData, &status);
-                    askedMaster = false;
-                } else if (status.MPI_TAG == MPI_TAG_TODO1) {
-                    MPI_Status tempStatus;
-                    MPI_Recv(&temp, 1, MPI_C_BOOL, MASTER_SOURCE, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
-                    break;
-                } else if (status.MPI_TAG == MPI_TAG_INIT) {
-                    MPI_Status tempStatus;
-                    MPI_Recv(&isInit, 1, MPI_C_BOOL, 0, status.MPI_TAG, MPI_COMM_WORLD, &tempStatus);
-                }
-            }
-            tspNode_t* node = _getNextNode(solverData->queue, solverData->solution->priority);
-
-            if (node == NULL) {
-                if (!askedMaster && isInit) {
-                    // ask master for a new node
-                    MPI_Send(&temp, 1, MPI_C_BOOL, MASTER_SOURCE, MPI_TAG_ASK_NODE, MPI_COMM_WORLD);
-                    askedMaster = true;
-                }
-                continue;
-            } else {
-                _processNode(solverData, node);
-                tspNodeDestroy(node);
-            }
-        }
     }
 }
 
-tspSolution_t* tspSolve(const tsp_t* tsp, double maxTourCost) {
+static bool _getControlInfo(tspSolverData_t* solverData) {
+    tspApiControl_t* controlMsg = &solverData->controlMsgIn;
+    MPI_Wait(&solverData->controlRequest, NULL);
+    if (!controlMsg->running)
+        return false;
+
+    solverData->controlDelay = controlMsg->delay;
+    if (controlMsg->solutionPriority < solverData->solution->priority) {
+        solverData->solution->hasSolution = controlMsg->hasSolution;
+        solverData->solution->cost = controlMsg->solutionCost;
+        solverData->solution->priority = controlMsg->solutionPriority;
+        for (int i = 0; i < MAX_CITIES; i++)
+            solverData->solution->tour[i] = controlMsg->solutionTour[i];
+    }
+
+    for (int i = 0; i < controlMsg->nNodes; i++) {
+        double cost = controlMsg->costs[i];
+        double lb = controlMsg->lbs[i];
+        int length = controlMsg->lengths[i];
+        int currentCity = controlMsg->tours[i][controlMsg->lengths[i] - 1];
+        tspNode_t* node = tspNodeCreate(cost, lb, length, currentCity);
+        for (int j = 0; j < controlMsg->lengths[i]; j++)
+            node->tour[j] = controlMsg->tours[i][j];
+        node->visited = controlMsg->visited[i];
+        queuePush(solverData->queue, node);
+    }
+
+    return true;
+}
+
+static void _sendControlInfo(tspSolverData_t* solverData, bool running) {
+    tspApiControl_t* controlMsg = &solverData->controlMsgOut;
+    controlMsg->running = running;
+    controlMsg->hasSolution = solverData->solution->hasSolution;
+    controlMsg->solutionCost = solverData->solution->cost;
+    controlMsg->solutionPriority = solverData->solution->priority;
+    for (int i = 0; i < MAX_CITIES; i++)
+        controlMsg->solutionTour[i] = solverData->solution->tour[i];
+
+    controlMsg->nNodes = 0;
+    for (int i = 0; i < MAX_CONTROL_NODES; i++) {
+        tspNode_t* node = _getNextNode(solverData->queue, solverData->solution->priority);
+        if (node == NULL)
+            break;
+
+        controlMsg->nNodes++;
+        controlMsg->costs[i] = node->cost;
+        controlMsg->lbs[i] = node->lb;
+        controlMsg->priorities[i] = node->priority;
+        controlMsg->lengths[i] = node->length;
+        controlMsg->visited[i] = node->visited;
+        tspNodeCopyTour(node, controlMsg->tours[i]);
+    }
+
+    MPI_Request gatherRequest;
+    tspApiControl_t* gatheredControlMsgs = (tspApiControl_t*)malloc(solverData->api->nProcs * sizeof(tspApiControl_t));
+    MPI_Igather(controlMsg, 1, solverData->api->control_t, gatheredControlMsgs, 1, solverData->api->control_t, 0,
+                MPI_COMM_WORLD, &gatherRequest);
+    MPI_Irecv(&solverData->controlMsgIn, 1, solverData->api->control_t, 0, MPI_TAG_CONTROL, MPI_COMM_WORLD,
+              &solverData->controlRequest);
+    if (solverData->api->procType != PROCTYPE_MASTER)
+        return;
+
+    MPI_Wait(&gatherRequest, NULL);
+
+    int nGatheredNodes = gatheredControlMsgs[0].nNodes;;
+    int bestSolutionProc = 0;
+    double bestSolutionPriority = gatheredControlMsgs[0].solutionPriority;
+    for (int i = 1; i < solverData->api->nProcs; i++) {
+        nGatheredNodes += gatheredControlMsgs[i].nNodes;
+        if (gatheredControlMsgs[i].solutionPriority < bestSolutionPriority) {
+            bestSolutionProc = i;
+            bestSolutionPriority = gatheredControlMsgs[i].solutionPriority;
+        }
+    }
+
+    int* gatheredNodeLocs = NULL;
+    if (nGatheredNodes > 0) {
+        gatheredNodeLocs = (int*)malloc(nGatheredNodes * 2 * sizeof(int));
+        for (int i = 0, j = 0, k = 0; i < solverData->api->nProcs; i++, k = 0) {
+            gatheredNodeLocs[j++] = i;
+            gatheredNodeLocs[j++] = k++;
+        }
+    }
+
+
+    tspApiControl_t controlMsgOut;
+    controlMsgOut.running = false;
+    controlMsgOut.delay = CONTROL_DELAY_MULTIPLIER(solverData->controlDelay);
+    for (int i = 0; i < solverData->api->nProcs; i++)
+        controlMsgOut.running = controlMsgOut.running || gatheredControlMsgs[i].running;
+    controlMsgOut.hasSolution = gatheredControlMsgs[bestSolutionProc].hasSolution;
+    controlMsgOut.solutionCost = gatheredControlMsgs[bestSolutionProc].solutionCost;
+    controlMsgOut.solutionPriority = gatheredControlMsgs[bestSolutionProc].solutionPriority;
+    for (int i = 0; i < MAX_CITIES; i++)
+        controlMsgOut.solutionTour[i] = gatheredControlMsgs[bestSolutionProc].solutionTour[i];
+
+    int nodeId = 0;
+    for (int i = 0; i < solverData->api->nProcs; i++) {
+        controlMsgOut.nNodes = nGatheredNodes / solverData->api->nProcs;
+        for (int j = 0; j < nGatheredNodes / solverData->api->nProcs; j++, nodeId++) {
+            int procId = gatheredNodeLocs[nodeId];
+            int offset = gatheredNodeLocs[nodeId + 1];
+            controlMsgOut.costs[j] = gatheredControlMsgs[procId].costs[offset];
+            controlMsgOut.lbs[j] = gatheredControlMsgs[procId].lbs[offset];
+            controlMsgOut.priorities[j] = gatheredControlMsgs[procId].priorities[offset];
+            controlMsgOut.lengths[j] = gatheredControlMsgs[procId].lengths[offset];
+            for (int k = 0; k < gatheredControlMsgs[procId].lengths[offset]; k++)
+                controlMsgOut.tours[j][k] = gatheredControlMsgs[procId].tours[offset][k];
+            controlMsgOut.visited[j] = gatheredControlMsgs[procId].visited[offset];
+        }
+
+        MPI_Request request;
+        MPI_Isend(&controlMsgOut, 1, solverData->api->control_t, i, MPI_TAG_CONTROL, MPI_COMM_WORLD, &request);
+    }
+
+    // for (; nodeId < nGatheredNodes; nodeId++) {
+    //     int procId = gatheredNodeLocs[nodeId];
+    //     int offset = gatheredNodeLocs[nodeId + 1];
+    //     double cost = gatheredControlMsgs[procId].costs[offset];
+    //     double lb = gatheredControlMsgs[procId].lbs[offset];
+    //     int length = gatheredControlMsgs[procId].lengths[offset];
+    //     int currentCity = gatheredControlMsgs[procId].tours[offset][gatheredControlMsgs[procId].lengths[offset] - 1];
+    //     tspNode_t* node = tspNodeCreate(cost, lb, length, currentCity);
+    //     for (int j = 0; j < gatheredControlMsgs[procId].lengths[offset]; j++)
+    //         node->tour[j] = gatheredControlMsgs[procId].tours[offset][j];
+    //     node->visited = gatheredControlMsgs[procId].visited[offset];
+    //     queuePush(solverData->queue, node);
+    // }
+}
+
+tspSolution_t* tspSolve(tspApi_t* api, const tsp_t* tsp, double maxTourCost) {
     tspSolverData_t solverData;
     solverData.tsp = tsp;
-    solverData.api = tspApiCreate();
+    solverData.api = api;
     solverData.solution = tspSolutionCreate(maxTourCost);
     solverData.queue = queueCreate(__tspNodeCmpFun);
+    solverData.controlBlock = false;
+    solverData.controlTime = -omp_get_wtime();
+    solverData.controlDelay = INITIAL_CONTROL_DELAY;
+    _processStartNode(&solverData);
 
-    tspApiInit(solverData.api);
+    while (true) {
+        int hasControlRequestArrived = 0;
+        MPI_Test(&solverData.controlRequest, &hasControlRequestArrived, NULL);
+        if (hasControlRequestArrived != 0) {
+            solverData.controlBlock = false;
+            solverData.controlTime = -omp_get_wtime();
+            if (!_getControlInfo(&solverData))
+                break;
+        }
 
-    if (solverData.api->nProcs == 1) {
-        _singleProcSolve(&solverData);
-    } else {
-        _multipleProcSolve(&solverData);
+        if (!solverData.controlBlock && solverData.controlTime + omp_get_wtime() > solverData.controlDelay) {
+            solverData.controlBlock = true;
+            _sendControlInfo(&solverData, true);
+        }
+
+        tspNode_t* node = _getNextNode(solverData.queue, solverData.solution->priority);
+        if (node == NULL) {
+            _sendControlInfo(&solverData, false);
+            MPI_Wait(&solverData.controlRequest, NULL);
+            continue;
+        }
+
+        _processNode(&solverData, node);
+        tspNodeDestroy(node);
     }
 
-    int procId = solverData.api->procId;
-    tspApiTerminate(solverData.api);
-    tspApiDestroy(solverData.api);
     queueDestroy(solverData.queue, __tspNodeDestroyFun);
-    if (procId) {
-        tspSolutionDestroy(solverData.solution);
-        exit(EXIT_SUCCESS);
-    } else {
-        return solverData.solution;
-    }
+    return solverData.solution;
 }

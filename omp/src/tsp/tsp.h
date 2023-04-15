@@ -12,12 +12,11 @@
 
 typedef struct {
     int nCities;
-    int nRoads;
-    double** roadCosts;
-    double* minCosts;
+    double roadCosts[MAX_CITIES][MAX_CITIES];
+    double minCosts[MAX_CITIES][TSP_TOTAL_MIN_COSTS];
 } tsp_t;
 
-tsp_t tspCreate(int nCities, int nRoads);
+tsp_t* tspCreate();
 void tspDestroy(tsp_t* tsp);
 void tspPrint(const tsp_t* tsp);
 void tspInitializeMinCosts(tsp_t* tsp);
@@ -26,8 +25,6 @@ inline bool tspIsNeighbour(const tsp_t* tsp, int city1, int city2) {
     return tsp->roadCosts[city1][city2] != NONEXISTENT_ROAD_VALUE;
 }
 
-inline double tspMinCost(const tsp_t* tsp, int city, int mod) {
-    return tsp->minCosts[city * TSP_TOTAL_MIN_COSTS + mod];
-}
+inline double tspMinCost(const tsp_t* tsp, int city, int mod) { return tsp->minCosts[city][mod]; }
 
 #endif // __TSP__TSP_H__
